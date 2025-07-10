@@ -264,6 +264,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+greed-venv/
 
 # Spyder project settings
 .spyderproject

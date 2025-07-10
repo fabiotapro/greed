@@ -1,0 +1,137 @@
+#include "/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/clientlib/decompiler_imports.dl"
+#include "/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/clientlib/loops_semantics.dl"
+#include "/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/clientlib/guards.dl"
+#include "/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/clientlib/flows.dl"
+
+/**
+ * New client helpers to fix incomplete external call information
+**/
+
+.decl CallToSignatureHex(callStmt: Statement, selectorHex: symbol)
+CallToSignatureHex(callStmt, selectorHex) :-
+  RawSelectorVar(selectorVar, selectorHex),
+  selectorHex != "0xffffffff", // hack for now
+  LocalFlows(selectorVar, actual),
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, 0, actual),
+  CALLStatement(callStmt, _).
+.output CallToSignatureHex
+
+.decl RawSelectorVar(var: Variable, selector: symbol)
+RawSelectorVar(var, selector) :-
+  Variable_Value(var, selector),
+  strlen(selector) = 10,
+  substr(selector, 0, 2) = "0x".
+.output RawSelectorVar
+
+
+
+/**
+ * Abstractions for the Data flow analysis
+**/
+
+.decl CallToOracle(sourceStmt: Statement)
+
+CallToOracle(sourceStmt):-
+  (CallToSignatureHex(sourceStmt, "0x0902f1ac");             // getReserves()
+  CallToSignatureHex(sourceStmt, "0xfc57d4df");              // getUnderlyingPrice(address)
+  CallToSignatureHex(sourceStmt, "0x809a9e55")).             // getExpectedRate(address,address,uint256)
+
+
+.decl ExternalCallIsNotOracleOrSink(callStmt: Statement, funcSign: symbol)
+
+ExternalCallIsNotOracleOrSink(callStmt, funcSign):-
+  CallToSignatureHex(callStmt, funcSign),
+  // Oracles
+  funcSign != "0x0902f1ac", // getReserves()
+  funcSign != "0xfc57d4df", // getUnderlyingPrice(address)
+  funcSign != "0x809a9e55", // getExpectedRate(address,address,uint256)
+  // Sinks
+  funcSign != "0xa9059cbb", // transfer(address,uint256)
+  funcSign != "0x23b872dd". // transferFrom(address,address,uint256)
+
+/**
+ * Data flow analysis for price manipulation vulnerabilities for the Gigahorse toolchain
+**/
+
+/**
+ * Complete flow from Oracle to Sink
+**/
+.decl CompleteFlowOracleToSink(sourceStmt:Statement, sinkStmt:Statement)
+CompleteFlowOracleToSink(sourceStmt, sinkStmt) :-
+  CallToOracle(sourceStmt),
+  ExternalCall_ActualReturn(sourceStmt, priceVar, _), // taint all variables for now (more info on actual_vars on memory_modeling_api.dl)
+  DataFlows(priceVar, taintedVar), // propagate flow
+  (ERC20TransferCall(sinkStmt, _, taintedVar);ERC20TransferFromCall(sinkStmt, _, _, taintedVar)).
+.output CompleteFlowOracleToSink
+
+/**
+ * Partial flow from Oracle to ExternalCall
+**/
+.decl PartialFlowOracleToExternalCall(sourceStmt:Statement, callStmt:Statement, funcSign:symbol)
+PartialFlowOracleToExternalCall(sourceStmt, callStmt, funcSign) :-
+  CallToOracle(sourceStmt),
+  ExternalCall_ActualReturn(sourceStmt, priceVar, _),
+  DataFlows(priceVar, taintedVar),
+  CallToSignatureHex(callStmt, funcSign),
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, _, taintedVar), // statement uses taintedVar
+  ExternalCallIsNotOracleOrSink(callStmt, funcSign).
+.output PartialFlowOracleToExternalCall
+
+/**
+ * Partial flow from CALLDATALOAD to Sink
+**/
+.decl PartialFlowCallDataLoadToSink(sourceStmt:Statement, sinkStmt:Statement)
+PartialFlowCallDataLoadToSink(sourceStmt, sinkStmt) :-
+  CALLDATALOAD(sourceStmt, _, dataInputSrcVar),
+  DataFlows(dataInputSrcVar, taintedVar),
+  (ERC20TransferCall(sinkStmt, _, taintedVar);ERC20TransferFromCall(sinkStmt, _, _, taintedVar)).
+.output PartialFlowCallDataLoadToSink
+
+/**
+ * Partial flow from CALLDATALOAD to ExternalCall
+**/
+.decl PartialFlowCallDataLoadToExternalCall(sourceStmt:Statement, callStmt:Statement, funcSign:symbol)
+PartialFlowCallDataLoadToExternalCall(sourceStmt, callStmt, funcSign) :-
+  CALLDATALOAD(sourceStmt, _, dataInputSrcVar),
+  DataFlows(dataInputSrcVar, taintedVar),
+  CallToSignatureHex(callStmt, funcSign),
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, _, taintedVar), // statement uses taintedVar
+  ExternalCallIsNotOracleOrSink(callStmt, funcSign).
+.output PartialFlowCallDataLoadToExternalCall
+
+// ############################################################################# //
+// #######  Gigahorse's approach but removing the public function check  ####### //
+// ############################################################################# //
+.decl GenericCallToSignature(call:Statement, normSigHashVal:symbol)
+.output GenericCallToSignature
+
+GenericCallToSignature(call, normSigHashVal):-
+  GenericConstantPossibleSigHash(sigHashVal, normSigHashVal),
+  strlen(sigHashVal) > 4,
+  Variable_Value(sigVar, sigHashVal),
+  normSigHashVal != "0xffffffff", // hack for now
+  LocalFlows(sigVar, actual),
+  StatementUsesMemory_ActualMemoryArg(call, _, 0, actual),
+  CALLStatement(call, _).
+
+.decl GenericConstantPossibleSigHash(constValSigHash: Value, normalizedSigHash: Value)
+
+// Covers both small and big numbers
+GenericConstantPossibleSigHash(sigHash, sigHashForm):-
+  CONST(constStmt, constVar),
+  Variable_Value(constVar, sigHash),
+  len = strlen(sigHash),
+  temp = min(10, len),
+  Helper_Zeros(zeroz, 10 - temp),
+  sigHashForm = cat("0x",cat(zeroz, substr(sigHash, 2, temp - 2))).
+
+// REVIEW (YS): I don't fully understand the above. Why truncate the
+// first two digits of the constant and prepend "0x"? If the two digits
+// were not relevant, they were "0x" to begin with. Anyway, I'm leaving
+// as-is to be safe, and adding more cases below.
+GenericConstantPossibleSigHash(sigHash, sigHashForm):-
+  CONST(constStmt, constVar),
+  Variable_Value(constVar, sigHash),
+  len = strlen(sigHash),
+  ((len >= 9, sigHashForm = cat("0x0", substr(sigHash, 2, 7)));
+   (len >= 8, sigHashForm = cat("0x00", substr(sigHash, 2, 6)))).

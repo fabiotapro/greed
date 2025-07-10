@@ -1,0 +1,10 @@
+0xf	mapping (uint256 => struct_2010)
+0x2	uint256[]
+0x10	uint256[]
+0x12	mapping (uint256 => struct_2012)
+0x19	mapping (uint256 => uint256)
+0x1a	mapping (uint256 => mapping (uint256 => uint256))
+0x9	mapping (uint256 => uint256)
+0x3	uint256[]
+0x11	struct_2003[]
+0xe	mapping (uint256 => uint256)

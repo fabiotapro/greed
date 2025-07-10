@@ -1,0 +1,46 @@
+#include "/opt/gigahorse/gigahorse-toolchain/clientlib/decompiler_imports.dl"
+#include "/opt/gigahorse/gigahorse-toolchain/clientlib/flows.dl"
+
+/**
+  Detects dynamic jumps where the destination address originates from calldata 
+  (i.e., CALLDATALOAD, CALLDATACOPY) and which flows into a jump instruction (i.e, JUMP, JUMPI).
+*/
+.output DynamicJumpFromCalldata
+.decl DynamicJumpFromCalldata(jmpStmt: Statement, calldataStmt: Statement)
+DynamicJumpFromCalldata(jmpStmt, calldataStmt) :-
+    (CALLDATALOAD(calldataStmt, _, dataInputSrcVar);CALLDATACOPY(calldataStmt, _, _, dataInputSrcVar)),
+    DataFlows(dataInputSrcVar, jmpDestVar),
+    (JUMPI(jmpStmt, jmpDestVar, _);JUMP(jmpStmt, jmpDestVar)).
+
+/**
+  Detects dynamic jumps where the destination address originates from value 
+  (i.e., CALLVALUE) and which flows into a jump instruction (i.e, JUMP, JUMPI).
+*/
+.output DynamicJumpFromValue
+.decl DynamicJumpFromValue(jmpStmt: Statement, valueStmt: Statement)
+DynamicJumpFromValue(jmpStmt, valueStmt) :-
+    CALLVALUE(valueStmt, valueSrcVar),
+    DataFlows(valueSrcVar, jmpDestVar),
+    (JUMPI(jmpStmt, jmpDestVar, _);JUMP(jmpStmt, jmpDestVar)).
+
+/**
+  Detects dynamic jumps where the destination address originates from memory 
+  (i.e., MLOAD) and which flows into a jump instruction (i.e, JUMP, JUMPI).
+*/
+.output DynamicJumpFromMemory
+.decl DynamicJumpFromMemory(jmpStmt: Statement, mloadStmt: Statement)
+DynamicJumpFromMemory(jmpStmt, mloadStmt) :-
+    MLOAD(mloadStmt, _, mloadSrcVar),
+    DataFlows(mloadSrcVar, jmpDestVar),
+    (JUMPI(jmpStmt, jmpDestVar, _);JUMP(jmpStmt, jmpDestVar)).
+
+/**
+  Detects dynamic jumps where the destination address originates from storage 
+  (i.e., SLOAD) and which flows into a jump instruction (i.e, JUMP, JUMPI).
+*/
+.output DynamicJumpFromStorage
+.decl DynamicJumpFromStorage(jmpStmt: Statement, sloadStmt: Statement)
+DynamicJumpFromStorage(jmpStmt, sloadStmt) :-
+    SLOAD(sloadStmt, _, sloadSrcVar),
+    DataFlows(sloadSrcVar, jmpDestVar),
+    (JUMPI(jmpStmt, jmpDestVar, _);JUMP(jmpStmt, jmpDestVar)).
