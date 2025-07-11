@@ -54,6 +54,18 @@ class CompleteFlow:
     flows: list         # list of flow paths (each is a list of Flow steps)
 
 
+
+def adjust_brightness(hex_color, factor):
+    """
+    Lighten or darken a hex color.
+    factor > 1.0 → lighter
+    factor < 1.0 → darker
+    """
+    hex_color = hex_color.lstrip("#")
+    rgb = [int(hex_color[i:i+2], 16) for i in (0, 2, 4)]
+    adjusted = [min(255, int(c * factor)) for c in rgb]
+    return "#{:02x}{:02x}{:02x}".format(*adjusted)
+
 def export_to_graphviz_pdf():
     dot_file = f"/home/fbioribeiro/thesis-tool/greed/resources/intercontract_callgraph.dot"
     pdf_file = f"/home/fbioribeiro/thesis-tool/greed/resources/intercontract_callgraph.pdf"
@@ -75,17 +87,23 @@ def export_to_graphviz_pdf():
         for caller, callees in intercontract_call_graph.items():
             # Add caller node with color if not already added
             if caller not in added_nodes:
-                contract = caller.split("::")[0]
+                contract, function_entry_block = caller.split("::")
+
                 color = contract_colors[contract]
-                f.write(f"  \"{caller}\" [style=filled, fillcolor=\"{color}\"];\n")
+                penwidth = "3.5" if function_entry_block in public_functions[contract].keys() else "1"
+
+                f.write(f"  \"{caller}\" [style=filled, fillcolor=\"{color}\", penwidth=\"{penwidth}\"];\n")
                 added_nodes.add(caller)
 
             for callee in callees:
                 # Add callee node with color if not already added
                 if callee not in added_nodes:
-                    contract = callee.split("::")[0]
+                    contract, function_entry_block = callee.split("::")
+
                     color = contract_colors[contract]
-                    f.write(f"  \"{callee}\" [style=filled, fillcolor=\"{color}\"];\n")
+                    penwidth = "3.5" if function_entry_block in public_functions[contract].keys() else "1"
+                    f.write(f"  \"{callee}\" [style=filled, fillcolor=\"{color}\", penwidth=\"{penwidth}\"];\n")
+
                     added_nodes.add(callee)
 
                 # Add the edge
@@ -298,8 +316,8 @@ def recurse_partial_flow_calldataload_to_external_call(contract_name, flows):
             print(f"Checking callee: {callee}")
             callee_contract_name, callee_entry_block = callee.split("::")
 
-            if callee_contract_name != contract_name:
-                print(f"Inter-contract edge found. External call in {compose_function_name(contract_name, external_call_function_entry_block)} may call function in another contract: {callee}")
+            if callee_contract_name != contract_name and external_sig == public_functions[callee_contract_name][callee_entry_block]:
+                print(f"Inter-contract edge found. External call in {compose_function_name(contract_name, external_call_function_entry_block)} calls function in another contract: {callee}")
                 
                 # Recurse with copies of the flows list
                 flows_copy_1 = [copy.deepcopy(f) for f in flows]
@@ -344,8 +362,8 @@ def check_partial_flows(contract_name):
             print(f"Checking callee: {callee}")
             callee_contract_name, callee_entry_block = callee.split("::")
 
-            if callee_contract_name != contract_name:
-                print(f"Inter-contract edge found. External call in {compose_function_name(contract_name, external_call_function_entry_block)} may call function in another contract: {callee}")
+            if callee_contract_name != contract_name and external_sig == public_functions[callee_contract_name][callee_entry_block]:
+                print(f"Inter-contract edge found. External call in {compose_function_name(contract_name, external_call_function_entry_block)} calls function {external_sig} in another contract: {callee}")
                 
                 # Recurse with copies of the flows list
                 flows_copy_1 = [copy.deepcopy(f) for f in flows]
