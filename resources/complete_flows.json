@@ -1,0 +1,76 @@
+[
+  {
+    "flow_type": "IntraFlowOracleToSink",
+    "flows": [
+      {
+        "flow_type": "CompleteFlowOracleToSink",
+        "contract_name": "0_LendingContract",
+        "from_stmt": "0x5dd",
+        "to_stmt": "0x7e6S0x4e9S0x174"
+      }
+    ]
+  },
+  {
+    "flow_type": "InterFlowOracleToSink",
+    "flows": [
+      {
+        "flow_type": "PartialFlowOracleToExternalCall",
+        "contract_name": "0_LendingContract",
+        "from_stmt": "0x5dd",
+        "to_stmt": "0x48cS0x158"
+      },
+      {
+        "flow_type": "PartialFlowCallDataLoadToSink",
+        "contract_name": "0_SpecialBorrowHandler",
+        "from_stmt": "0x3bfS0x3f1S0x5c",
+        "to_stmt": "0x1cfS0x71"
+      }
+    ]
+  },
+  {
+    "flow_type": "InterFlowOracleToSink",
+    "flows": [
+      {
+        "flow_type": "PartialFlowOracleToExternalCall",
+        "contract_name": "0_LendingContract",
+        "from_stmt": "0x27cS0xdf",
+        "to_stmt": "0x32dS0xdf"
+      },
+      {
+        "flow_type": "PartialFlowCallDataLoadToExternalCall",
+        "contract_name": "0_SpecialBorrowHandler",
+        "from_stmt": "0x3bfS0x3f1S0xb4",
+        "to_stmt": "0x352S0xc9"
+      },
+      {
+        "flow_type": "PartialFlowCallDataLoadToSink",
+        "contract_name": "0_RewardContract",
+        "from_stmt": "0x241S0x273S0x46",
+        "to_stmt": "0x18eS0x5b"
+      }
+    ]
+  },
+  {
+    "flow_type": "InterFlowOracleToSink",
+    "flows": [
+      {
+        "flow_type": "PartialFlowOracleToExternalCall",
+        "contract_name": "0_LendingContract",
+        "from_stmt": "0x27cS0xdf",
+        "to_stmt": "0x32dS0xdf"
+      },
+      {
+        "flow_type": "PartialFlowCallDataLoadToExternalCall",
+        "contract_name": "0_SpecialBorrowHandler",
+        "from_stmt": "0x395S0x3e3S0xb4",
+        "to_stmt": "0x352S0xc9"
+      },
+      {
+        "flow_type": "PartialFlowCallDataLoadToSink",
+        "contract_name": "0_RewardContract",
+        "from_stmt": "0x241S0x273S0x46",
+        "to_stmt": "0x18eS0x5b"
+      }
+    ]
+  }
+]

@@ -8,7 +8,7 @@ import json
 from collections import defaultdict
 import subprocess
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 import copy
 
 # Global Variables
@@ -54,29 +54,20 @@ class CompleteFlow:
     flows: list         # list of flow paths (each is a list of Flow steps)
 
 
-
-def adjust_brightness(hex_color, factor):
-    """
-    Lighten or darken a hex color.
-    factor > 1.0 → lighter
-    factor < 1.0 → darker
-    """
-    hex_color = hex_color.lstrip("#")
-    rgb = [int(hex_color[i:i+2], 16) for i in (0, 2, 4)]
-    adjusted = [min(255, int(c * factor)) for c in rgb]
-    return "#{:02x}{:02x}{:02x}".format(*adjusted)
-
 def export_to_graphviz_pdf():
+    """
+    Exports the call graph to DOT and PDF with Graphviz.
+    """
     dot_file = f"/home/fbioribeiro/thesis-tool/greed/resources/intercontract_callgraph.dot"
     pdf_file = f"/home/fbioribeiro/thesis-tool/greed/resources/intercontract_callgraph.pdf"
 
-    # Step 1: Assign random colors to each contract
+    # Assign random colors to each contract
     def random_color():
         return "#%06x" % random.randint(0x444444, 0xFFFFFF)  # readable color range
 
     contract_colors = {contract: random_color() for contract in contract_set}
 
-    # Step 2: Write DOT file
+    # Write DOT file
     with open(dot_file, "w") as f:
         f.write("digraph InterContractCallGraph {\n")
         f.write("  rankdir=LR;\n")
@@ -111,7 +102,7 @@ def export_to_graphviz_pdf():
 
         f.write("}\n")
 
-    # Step 3: Call GraphViz to export to PDF
+    # Export to PDF
     try:
         subprocess.run(["dot", "-Tpdf", dot_file, "-o", pdf_file], check=True)
         print(f"Graph exported to: {pdf_file}")
@@ -133,6 +124,13 @@ def export_call_graphs_to_json():
     # Export reverse call graph
     with open("/home/fbioribeiro/thesis-tool/greed/resources/reverse_call_graph.json", "w") as f:
         json.dump(reverse_call_graph_serializable, f, indent=4)
+
+def export_complete_flows_to_json():
+    """
+    Exports the complete flows to a JSON file.
+    """
+    with open("/home/fbioribeiro/thesis-tool/greed/resources/complete_flows.json", "w") as f:
+        json.dump([asdict(cf) for cf in complete_flows], f, indent=2)
 
 def build_call_graphs(tac_code, function_set, contract_name):
     """
@@ -167,9 +165,13 @@ def build_call_graphs(tac_code, function_set, contract_name):
     return call_graph, reverse_call_graph
 
 def load_files():
+    """
+    Loads the necessary files, from the Gigahorse analysis, for each contract.
+    """
 
     for contract_name in contract_set:
         print(f"Loading files for contract: {contract_name}")
+
         ### Load the contract TAC
         with open("/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/.temp/" + contract_name + "/out/contract.tac", "r") as tac_file:
             tac_code = tac_file.read()
@@ -282,106 +284,109 @@ def compose_function_name(contract_name, function_entry_block):
     """
     return f"{contract_name}::{function_entry_block}"
 
-def recurse_partial_flow_calldataload_to_sink(contract_name, flows):
+def recurse_partial_flow_calldataload_to_sink(contract_name, function_entry_block, flows):
+    """
+    Checks partial flows from calldataload to sink for a given contract.
+    """
     list_of_flows_lists = list()
 
     for flow in partial_flows_call_data_load_to_sink[contract_name]:
         calldataload_stmt, sink_stmt = flow
-        print(f"Checking partial flow calldataload->sink: CDL statement: {calldataload_stmt}, Sink statement: {sink_stmt}")
 
-        flows_copy = [copy.deepcopy(f) for f in flows]
-        f1 = Flow("PartialFlowCallDataLoadToSink", contract_name, calldataload_stmt, sink_stmt)
-        flows_copy.append(f1)
+        # Check if the calldataload statement is in the same function as the function entry block called
+        if function_entry_block == in_functions[contract_name][tac_blocks[contract_name][calldataload_stmt]]:
 
-        list_of_flows_lists.append(flows_copy)
+            flows_copy = [copy.deepcopy(f) for f in flows]
+            f1 = Flow("PartialFlowCallDataLoadToSink", contract_name, calldataload_stmt, sink_stmt)
+            flows_copy.append(f1)
+
+            list_of_flows_lists.append(flows_copy)
 
     return list_of_flows_lists
 
-def recurse_partial_flow_calldataload_to_external_call(contract_name, flows):
+def recurse_partial_flow_calldataload_to_external_call(contract_name, function_entry_block, flows):
+    """
+    Recursively checks partial flows from calldataload to external calls for a given contract.
+    """
     list_of_flows_lists = list()
 
     for flow in partial_flows_call_data_load_to_external_call[contract_name]:
         calldataload_stmt, external_stmt, external_sig = flow
-        print(f"Checking partial flow calldataload->external call: CDL statement: {calldataload_stmt}, External statement: {external_stmt}, External signature: {external_sig}")
 
-        external_call_block = tac_blocks[contract_name][external_stmt] # Statement -> Block
-        external_call_function_entry_block = in_functions[contract_name][external_call_block] # Block -> Function entry block
-        print(f"External call function entry block: {external_call_function_entry_block}")
+        # Check if the calldataload statement is in the same function as the function entry block called
+        if function_entry_block == in_functions[contract_name][tac_blocks[contract_name][calldataload_stmt]]:
 
-        f1 = Flow("PartialFlowCallDataLoadToExternalCall", contract_name, calldataload_stmt, external_stmt)
-        flows.append(f1)
+            external_call_block = tac_blocks[contract_name][external_stmt] # Statement -> Block
+            external_call_function_entry_block = in_functions[contract_name][external_call_block] # Block -> Function entry block
+            
+            flows_copy = [copy.deepcopy(f) for f in flows]
+            f1 = Flow("PartialFlowCallDataLoadToExternalCall", contract_name, calldataload_stmt, external_stmt)
+            flows_copy.append(f1)
 
-        # Check if any callee belongs to another contract
-        for callee in intercontract_call_graph[compose_function_name(contract_name, external_call_function_entry_block)]:
-            print(f"Checking callee: {callee}")
-            callee_contract_name, callee_entry_block = callee.split("::")
+            # Check if any callee belongs to another contract
+            for callee in intercontract_call_graph[compose_function_name(contract_name, external_call_function_entry_block)]:
+                callee_contract_name, callee_entry_block = callee.split("::")
 
-            if callee_contract_name != contract_name and external_sig == public_functions[callee_contract_name][callee_entry_block]:
-                print(f"Inter-contract edge found. External call in {compose_function_name(contract_name, external_call_function_entry_block)} calls function in another contract: {callee}")
-                
-                # Recurse with copies of the flows list
-                flows_copy_1 = [copy.deepcopy(f) for f in flows]
-                flows_copy_2 = [copy.deepcopy(f) for f in flows]
+                if callee_contract_name != contract_name and external_sig == public_functions[callee_contract_name][callee_entry_block]:
+                    
+                    # Recurse with copies of the flows list
+                    flows_copy_1 = [copy.deepcopy(f) for f in flows_copy]
+                    flows_copy_2 = [copy.deepcopy(f) for f in flows_copy]
 
-                list_of_flows_lists_1 = recurse_partial_flow_calldataload_to_sink(callee_contract_name, flows_copy_1)
+                    list_of_flows_lists_1 = recurse_partial_flow_calldataload_to_sink(callee_contract_name, callee_entry_block, flows_copy_1)
 
-                list_of_flows_lists_2 = recurse_partial_flow_calldataload_to_external_call(callee_contract_name, flows_copy_2)
+                    list_of_flows_lists_2 = recurse_partial_flow_calldataload_to_external_call(callee_contract_name, callee_entry_block, flows_copy_2)
 
-                list_of_flows_lists.extend(list_of_flows_lists_1)
-                list_of_flows_lists.extend(list_of_flows_lists_2)
+                    list_of_flows_lists.extend(list_of_flows_lists_1)
+                    list_of_flows_lists.extend(list_of_flows_lists_2)
 
     return list_of_flows_lists
 
 def check_partial_flows(contract_name):
+    """
+    Checks the partial flows from Oracle to External Call and recurses different partial flows from other contracts to find complete flows ending in sinks.
+    """
+    list_of_flows_lists = list()
 
     for flow in partial_flows_oracle_to_external_call[contract_name]:
-        
         oracle_stmt, external_stmt, external_sig = flow
-        print(f"Checking partial flow: Oracle statement: {oracle_stmt}, External statement: {external_stmt}, External signature: {external_sig}")
 
         flows = list()
         f1 = Flow("PartialFlowOracleToExternalCall", contract_name, oracle_stmt, external_stmt)
         flows.append(f1)
 
-        oracle_block = tac_blocks[contract_name][oracle_stmt] # Statement -> Block
-        oracle_function_entry_block = in_functions[contract_name][oracle_block] # Block -> Function entry block
-        print(f"Oracle function entry block: {oracle_function_entry_block}")
-
         external_call_block = tac_blocks[contract_name][external_stmt] # Statement -> Block
         external_call_function_entry_block = in_functions[contract_name][external_call_block] # Block -> Function entry block
-        print(f"External call function entry block: {external_call_function_entry_block}")
 
-        # TODO: NEED TO CHECK BOTH CALLDATALOAD -> SINK AND CALLDATALOAD -> EXTERNAL CALL
-        # TODO: NEED TO FIND A WAY TO SPLIT IF MULTIPLE ARE FOUND
-        # TODO: BEST WAY IS PROBABLY ONE FUNCTION FOR EACH TYPE OF PARTIAL FLOW FROM THE ABOVE TO ANALYZE THE
-        # TODO: SOME SORT OF RECURSION THAT GOES ON ADDING FLOWS TO THE LIST AND RETURNS IT IN THE END OF THE RECURSION
-        # TODO: AT THE END ONLY ADD TO COMPLETE FLOWS IF THE LAST FLOW ENDS IN A SINK
-
-        # Check if any callee belongs to another contract
+        # Check if any callee of the external call belongs to another contract
         for callee in intercontract_call_graph[compose_function_name(contract_name, external_call_function_entry_block)]:
-            print(f"Checking callee: {callee}")
             callee_contract_name, callee_entry_block = callee.split("::")
 
             if callee_contract_name != contract_name and external_sig == public_functions[callee_contract_name][callee_entry_block]:
-                print(f"Inter-contract edge found. External call in {compose_function_name(contract_name, external_call_function_entry_block)} calls function {external_sig} in another contract: {callee}")
                 
                 # Recurse with copies of the flows list
                 flows_copy_1 = [copy.deepcopy(f) for f in flows]
                 flows_copy_2 = [copy.deepcopy(f) for f in flows]
 
-                list_of_flows_lists_1 = recurse_partial_flow_calldataload_to_sink(callee_contract_name, flows_copy_1)
+                list_of_flows_lists_1 = recurse_partial_flow_calldataload_to_sink(callee_contract_name, callee_entry_block, flows_copy_1)
 
-                list_of_flows_lists_2 = recurse_partial_flow_calldataload_to_external_call(callee_contract_name, flows_copy_2)
+                list_of_flows_lists_2 = recurse_partial_flow_calldataload_to_external_call(callee_contract_name, callee_entry_block, flows_copy_2)
 
-        for flows_list in list_of_flows_lists_1 + list_of_flows_lists_2:
+                list_of_flows_lists.extend(list_of_flows_lists_1)
+                list_of_flows_lists.extend(list_of_flows_lists_2)
 
-            # Only add to complete flows if the (last partial) flow ends in a sink
-            # NOTE: In theory, only partial flows that end in a sink will be added to the returned list of lists in the recursion,
-            # NOTE: so these flows should already always end in a sink
-            if flows_list[-1].flow_type == "PartialFlowCallDataLoadToSink":
-                complete_flows.append(CompleteFlow("InterFlowOracleToSink", flows_list))
+    for flows_list in list_of_flows_lists:
+
+        # Only add to complete flows if the (last partial) flow ends in a sink
+        # NOTE: In theory, only partial flows that end in a sink will be added to the returned list of lists in the recursion,
+        # NOTE: so these flows should already always end in a sink
+        if flows_list[-1].flow_type == "PartialFlowCallDataLoadToSink":
+            complete_flows.append(CompleteFlow("InterFlowOracleToSink", flows_list))
 
 def print_complete_flows():
+    """
+    Prints the complete flows in a readable format for debug.
+    """
     for i, cf in enumerate(complete_flows):
         print(f"\n=== CompleteFlow #{i} ===")
         print(f"Flow type: {cf.flow_type}")
@@ -404,6 +409,8 @@ def main():
     print()
 
     load_files()
+    print("File loading complete.")
+    print()
 
     # Build per contract call graphs
     for contract_name in contract_set:
@@ -426,7 +433,6 @@ def main():
 
                     for entry_block, function_name in public_functions[other_contract_name].items():
                         if externalcall_function == function_name:
-                            print(f"Linking external call {statement} in {contract_name} to public function {function_name} in {other_contract_name}")
                             block = tac_blocks[contract_name][statement] # Statement -> Block
                             function_entry_block = in_functions[contract_name][block] # Block -> Function entry block
 
@@ -440,17 +446,25 @@ def main():
     export_call_graphs_to_json()
 
     print("Inter-contract call graph created and exported succesfully.")
+    print()
 
-    # Analyze candidate flows using the inter-contract call graph
+    # Analyze inter-contract flows using the inter-contract call graph
     for contract_name in contract_set:
-        print(f"Analyzing candidate flows for {contract_name}...")
+        print(f"Analyzing potential inter-contract flows for {contract_name}...")
 
         # TODO: Is there a way to check if the calldataload is indeed from the function that we are analyzing?
         # TODO: Can this approach incur in loops? In theory, I guess not?
         check_partial_flows(contract_name)
-        
-    print_complete_flows()
+    
+    print("Inter-contract flows analysis complete.")
+    print()
 
+    print_complete_flows()
+    print()
+
+    export_complete_flows_to_json()
+    print("Complete flows exported succesfully to JSON.")
+    print()
 
 if __name__ == "__main__":
     main()
