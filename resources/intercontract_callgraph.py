@@ -112,10 +112,24 @@ def export_to_graphviz_pdf():
 def export_call_graphs_to_json():
     """
     Exports the call graph and reverse call graph to JSON files.
+    Exports the per contract reverse call graphs to a separate JSON file.
     """
+
+    # Convert to JSON-safe structure (dict -> dict -> list)
+    json_ready_per_contract_reverse_call_graphs = {
+        contract_name: {
+            caller: list(callees)  # convert set -> list
+            for caller, callees in reverse_call_graph.items()
+        }
+        for contract_name, reverse_call_graph in per_contract_reverse_call_graphs.items()
+    }
 
     call_graph_serializable = {k: list(v) for k, v in intercontract_call_graph.items()}
     reverse_call_graph_serializable = {k: list(v) for k, v in intercontract_reverse_call_graph.items()}
+
+    # Export per contract reverse call graphs
+    with open("/home/fbioribeiro/thesis-tool/greed/resources/per_contract_reverse_call_graphs.json", "w") as f:
+        json.dump(json_ready_per_contract_reverse_call_graphs, f, indent=2)
 
     # Export call graph
     with open("/home/fbioribeiro/thesis-tool/greed/resources/call_graph.json", "w") as f:
@@ -397,7 +411,7 @@ def print_complete_flows():
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("contracts_str", type=str, help="Comma-separated list of the names of the contracts to analyze.")
+    parser.add_argument("contracts_str", type=str, help="Comma-separated list of the names of the contracts to analyze")
     return parser.parse_args()
 
 def main():
@@ -416,6 +430,10 @@ def main():
     for contract_name in contract_set:
 
         call_graph, reverse_call_graph = build_call_graphs(tac_codes[contract_name], function_sets[contract_name], contract_name)
+
+        # Update per contract call graphs
+        per_contract_call_graphs[contract_name] = call_graph
+        per_contract_reverse_call_graphs[contract_name] = reverse_call_graph
 
         # Update inter-contract call graphs
         for caller, callees in call_graph.items():

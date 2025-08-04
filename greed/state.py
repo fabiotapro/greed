@@ -33,6 +33,11 @@ class SymbolicEVMState:
     options: typing.Dict[str, typing.Any]
     registers: typing.Dict[str, typing.Any]
 
+    # thesis variables
+    prev_function_entry_block: str = "0x0"
+    curr_function_entry_block: str = "0x0"
+    pruning_already_checked: bool = False
+
     # default plugins
     solver: SimStateSolver
     globals: SimStateGlobals
@@ -185,9 +190,6 @@ class SymbolicEVMState:
             assert isinstance(init_ctx['CALLVALUE'], int), "Wrong type for CALLVALUE initial context"
             self.ctx["CALLVALUE"] = BVV(init_ctx["CALLVALUE"], 256)
 
-        self.ctx["is_relevant_function"] = False
-        self.ctx["prune_status"] = True
-
     @property
     def pc(self) -> str:
         return self._pc
@@ -336,6 +338,10 @@ class SymbolicEVMState:
         new_state.MAX_CALLDATA_SIZE = self.MAX_CALLDATA_SIZE
         new_state.calldata = self.calldata.copy(new_state=new_state)
         new_state.calldatasize = self.calldatasize
+
+        new_state.prev_function_entry_block = self.prev_function_entry_block
+        new_state.curr_function_entry_block = self.curr_function_entry_block
+        new_state.pruning_already_checked = self.pruning_already_checked
 
         new_state.active_plugins = dict()
         # Copy all the plugins

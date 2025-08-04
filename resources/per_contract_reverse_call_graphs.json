@@ -1,0 +1,31 @@
+{
+  "0_SpecialBorrowHandler": {},
+  "0_LendingContract": {
+    "0_LendingContract::0xd4c": [
+      "0_LendingContract::0xdf",
+      "0_LendingContract::0x542",
+      "0_LendingContract::0x143",
+      "0_LendingContract::0x15f"
+    ],
+    "0_LendingContract::0x542": [
+      "0_LendingContract::0x143",
+      "0_LendingContract::0x15f"
+    ],
+    "0_LendingContract::0x65e": [
+      "0_LendingContract::0x143",
+      "0_LendingContract::0x15f"
+    ],
+    "0_LendingContract::0xba5": [
+      "0_LendingContract::0x65e"
+    ],
+    "0_LendingContract::0xb74": [
+      "0_LendingContract::0x65e"
+    ]
+  },
+  "0_LogContract": {
+    "0_LogContract::0x429": [
+      "0_LogContract::0x82"
+    ]
+  },
+  "0_RewardContract": {}
+}

@@ -176,7 +176,7 @@ if [ -z $NO_GIGAHORSE ]; then
   #compile "main.dl" "logic/main.dl"
   #compile "analytics_client.dl" "clients/analytics_client.dl"
   #compile "greed_client.dl" "clientlib/greed_client.dl"
-  compile "thesis_client.dl" "clientlib/thesis_client.dl"
+  #compile "thesis_client.dl" "clientlib/thesis_client.dl"
 else
   true
 fi

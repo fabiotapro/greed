@@ -34,7 +34,7 @@ elif [ ! -f $GIGAHORSE_DIR/clients/greed_client.dl_compiled ]; then
 fi
 
 echo "Running gigahorse.py"
-/usr/bin/time -v $GIGAHORSE_DIR/gigahorse.py -q QUIET -T $TIMEOUT --reuse_datalog_bin --disable_inline --debug -C $GIGAHORSE_DIR/clients/analytics_client.dl_compiled,$GIGAHORSE_DIR/clients/greed_client.dl_compiled,$GIGAHORSE_DIR/clients/thesis_client.dl_compiled,$GIGAHORSE_DIR/clients/visualizeout.py $HEX_FILE &> exec_info &&
+/usr/bin/time -v $GIGAHORSE_DIR/gigahorse.py -T $TIMEOUT -C $GIGAHORSE_DIR/clients/analytics_client.dl_compiled,$GIGAHORSE_DIR/clients/greed_client.dl_compiled,$GIGAHORSE_DIR/clients/thesis_client.dl_compiled,$GIGAHORSE_DIR/clients/visualizeout.py $HEX_FILE &> exec_info &&
 curr_dir=$(pwd) && cd $GIGAHORSE_DIR && gigahorse_version=$(git rev-parse HEAD) && cd $curr_dir && printf "\tGigahorse version: $gigahorse_version\n" >> exec_info &&
 curr_dir=$(pwd) && cd $GREED_DIR && greed_version=$(git rev-parse HEAD) && cd $curr_dir && printf "\tgreed version: $greed_version\n" >> exec_info
 cp .temp/contract/out/* .

@@ -1,14 +1,14 @@
 {
     "0_LendingContract::0x143": [
+        "0_LendingContract::0x65e",
         "0_LendingContract::0xd4c",
         "0_LendingContract::0x542",
-        "0_SpecialBorrowHandler::0x5c",
-        "0_LendingContract::0x65e"
+        "0_SpecialBorrowHandler::0x5c"
     ],
     "0_LendingContract::0x15f": [
+        "0_LendingContract::0x65e",
         "0_LendingContract::0xd4c",
-        "0_LendingContract::0x542",
-        "0_LendingContract::0x65e"
+        "0_LendingContract::0x542"
     ],
     "0_LendingContract::0x542": [
         "0_LendingContract::0xd4c"
