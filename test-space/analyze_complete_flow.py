@@ -71,7 +71,7 @@ def find_to_stmt(state: SymbolicEVMState) -> bool:
     Find the target "to_stmt" in the state.
     """
     if state.curr_stmt.id == state.project.to_stmt:
-        print(f"Found target statement {state.curr_stmt.id} in state {state.uuid}")
+        print(f"Found target statement {state.curr_stmt.id} in state {state.uuid}. Has crossed from_stmt? {state.has_crossed_from_stmt}")
         return True
     return False
 
@@ -161,6 +161,11 @@ def main(args):
             contract_name = flow["contract_name"]
             from_stmt = flow["from_stmt"]
             to_stmt = flow["to_stmt"]
+
+    # DEBUG: MANUAL
+    contract_name = "3_0x5ad"
+    from_stmt = "0x1313"
+    to_stmt = "0x1c15"
         
     print("Contract name:" + contract_name)
     print("From statement:" + from_stmt)
@@ -246,7 +251,14 @@ def main(args):
 
     ####################################################################################################################
     else:
-        simgr.run(prune=prune_irrelevant_functions)
+        simgr.run(find=find_to_stmt, prune=prune_irrelevant_functions)
+        print(f"FINISHED!")
+
+        # Constraints
+        for state in simgr.stashes['found']:
+            print(f"State {state.uuid} has constraints: {state.constraints}")
+            print(f"State {state.uuid} | Crossed from_stmt: {state.crossed_from_stmt.id}")
+            print(f"State {state.uuid} | Path constraints: {state.solver.path_constraints[0].dump()}")
 
     if args.debug:
         IPython.embed()

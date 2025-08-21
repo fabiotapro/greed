@@ -181,6 +181,11 @@ class SimulationManager:
         # Let's step the active!
         for state in self.active:
             try:
+                # Check if the state has crossed the from_stmt
+                if state.curr_stmt.id == state.project.from_stmt:
+                    state.has_crossed_from_stmt = True
+                    state.crossed_from_stmt = state.curr_stmt
+                    print(f"State {state.uuid} has crossed from_stmt {state.project.from_stmt}")
                 successors = self.single_step_state(state)
             except Exception as e:
                 log.exception(f"Something went wrong while generating successor for {state}")

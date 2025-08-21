@@ -34,7 +34,8 @@ RawSelectorVar(var, selector) :-
 CallToOracle(sourceStmt):-
   (CallToSignatureHex(sourceStmt, "0x0902f1ac");             // getReserves()
   CallToSignatureHex(sourceStmt, "0xfc57d4df");              // getUnderlyingPrice(address)
-  CallToSignatureHex(sourceStmt, "0x809a9e55")).             // getExpectedRate(address,address,uint256)
+  CallToSignatureHex(sourceStmt, "0x809a9e55");             // getExpectedRate(address,address,uint256)
+  CallToSignatureHex(sourceStmt, "0x49f9b0f7")).             // calculateSaleReturn(uint256,uint256,uint32,uint256)
 
 
 .decl ExternalCallIsNotOracleOrSink(callStmt: Statement, funcSign: symbol)
@@ -45,6 +46,7 @@ ExternalCallIsNotOracleOrSink(callStmt, funcSign):-
   funcSign != "0x0902f1ac", // getReserves()
   funcSign != "0xfc57d4df", // getUnderlyingPrice(address)
   funcSign != "0x809a9e55", // getExpectedRate(address,address,uint256)
+  funcSign != "0x49f9b0f7", // calculateSaleReturn(uint256,uint256,uint32,uint256)
   // Sinks
   funcSign != "0xa9059cbb", // transfer(address,uint256)
   funcSign != "0x23b872dd". // transferFrom(address,address,uint256)

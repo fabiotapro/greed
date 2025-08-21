@@ -37,6 +37,8 @@ class SymbolicEVMState:
     prev_function_entry_block: str = "0x0"
     curr_function_entry_block: str = "0x0"
     pruning_already_checked: bool = False
+    has_crossed_from_stmt: bool = False
+    crossed_from_stmt: "TAC_Statement" = None  # the from_stmt crossed
 
     # default plugins
     solver: SimStateSolver
@@ -342,6 +344,8 @@ class SymbolicEVMState:
         new_state.prev_function_entry_block = self.prev_function_entry_block
         new_state.curr_function_entry_block = self.curr_function_entry_block
         new_state.pruning_already_checked = self.pruning_already_checked
+        new_state.has_crossed_from_stmt = self.has_crossed_from_stmt
+        new_state.crossed_from_stmt = self.crossed_from_stmt
 
         new_state.active_plugins = dict()
         # Copy all the plugins
