@@ -3,18 +3,30 @@
 #include "/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/clientlib/guards.dl"
 #include "/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/clientlib/flows.dl"
 
-/**
- * New client helpers to fix incomplete external call information
-**/
 
-.decl CallToSignatureHex(callStmt: Statement, selectorHex: symbol)
-CallToSignatureHex(callStmt, selectorHex) :-
+.decl TAC_Use_Variable_Value(callStmt: Statement, var: Variable, i: number, val: symbol)
+TAC_Use_Variable_Value(callStmt, var, i, val) :-
+  CALLStatement(callStmt, _),
+  Statement_Uses(callStmt, var, i),
+  Variable_Value(var, val).
+.output TAC_Use_Variable_Value
+
+.decl CallToSignatureHex(callStmt: Statement, sigHash: symbol)
+CallToSignatureHex(callStmt, sigHash) :- 
+  CALLStatement(callStmt, _),
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, 0, sigVar),
+  Variable_Value(sigVar, sigVal),
+  sigHash = substr(sigHash, 0, 10).
+.output CallToSignatureHex
+
+.decl CallToSignatureHexOld(callStmt: Statement, selectorHex: symbol)
+CallToSignatureHexOld(callStmt, selectorHex) :-
   RawSelectorVar(selectorVar, selectorHex),
   selectorHex != "0xffffffff", // hack for now
   LocalFlows(selectorVar, actual),
   StatementUsesMemory_ActualMemoryArg(callStmt, _, 0, actual),
   CALLStatement(callStmt, _).
-.output CallToSignatureHex
+.output CallToSignatureHexOld
 
 .decl RawSelectorVar(var: Variable, selector: symbol)
 RawSelectorVar(var, selector) :-
@@ -23,7 +35,25 @@ RawSelectorVar(var, selector) :-
   substr(selector, 0, 2) = "0x".
 .output RawSelectorVar
 
+.decl CallToSignatureHexExtended(mloadStmt: Statement, callStmt: Statement, selectorVar: Variable, actual: Variable, variableValue: symbol, index: number)
+CallToSignatureHexExtended(mloadStmt, callStmt, selectorVar, actual, variableValue, index) :-
+  StatementLoadsMemory(mloadStmt), // This is an MLOAD(stmt)
+  Statement_Defines(mloadStmt, selectorVar, _),
+  //mloadStmt = "0x1fdS0x74",
+  LocalFlows(selectorVar, actual),
+  //StatementUsesMemory_ActualMemoryArg(callStmt, _, 0, actual),
+  Statement_Uses(callStmt, actual, index),
+  Variable_Value(actual, variableValue),
+  CALLStatement(callStmt, _).
+.output CallToSignatureHexExtended
 
+.decl RawSelectorVarExtended(var: Variable, selectorPrefix: symbol)
+RawSelectorVarExtended(var, selectorPrefix) :-
+  Variable_Value(var, fullVal),
+  strlen(fullVal) >= 10,
+  substr(fullVal, 0, 10) = selectorPrefix,
+  substr(selectorPrefix, 0, 2) = "0x".
+.output RawSelectorVarExtended
 
 /**
  * Abstractions for the Data flow analysis
@@ -101,39 +131,14 @@ PartialFlowCallDataLoadToExternalCall(sourceStmt, callStmt, funcSign) :-
   ExternalCallIsNotOracleOrSink(callStmt, funcSign).
 .output PartialFlowCallDataLoadToExternalCall
 
-// ############################################################################# //
-// #######  Gigahorse's approach but removing the public function check  ####### //
-// ############################################################################# //
-.decl GenericCallToSignature(call:Statement, normSigHashVal:symbol)
-.output GenericCallToSignature
-
-GenericCallToSignature(call, normSigHashVal):-
-  GenericConstantPossibleSigHash(sigHashVal, normSigHashVal),
-  strlen(sigHashVal) > 4,
-  Variable_Value(sigVar, sigHashVal),
-  normSigHashVal != "0xffffffff", // hack for now
-  LocalFlows(sigVar, actual),
-  StatementUsesMemory_ActualMemoryArg(call, _, 0, actual),
-  CALLStatement(call, _).
-
-.decl GenericConstantPossibleSigHash(constValSigHash: Value, normalizedSigHash: Value)
-
-// Covers both small and big numbers
-GenericConstantPossibleSigHash(sigHash, sigHashForm):-
-  CONST(constStmt, constVar),
-  Variable_Value(constVar, sigHash),
-  len = strlen(sigHash),
-  temp = min(10, len),
-  Helper_Zeros(zeroz, 10 - temp),
-  sigHashForm = cat("0x",cat(zeroz, substr(sigHash, 2, temp - 2))).
-
-// REVIEW (YS): I don't fully understand the above. Why truncate the
-// first two digits of the constant and prepend "0x"? If the two digits
-// were not relevant, they were "0x" to begin with. Anyway, I'm leaving
-// as-is to be safe, and adding more cases below.
-GenericConstantPossibleSigHash(sigHash, sigHashForm):-
-  CONST(constStmt, constVar),
-  Variable_Value(constVar, sigHash),
-  len = strlen(sigHash),
-  ((len >= 9, sigHashForm = cat("0x0", substr(sigHash, 2, 7)));
-   (len >= 8, sigHashForm = cat("0x00", substr(sigHash, 2, 6)))).
+// /**
+//  * Partial flow from ExternalCall to Sink
+// **/
+// .decl PartialFlowExternalCallToSink(callStmt:Statement, sinkStmt:Statement, funcSign:symbol)
+// PartialFlowExternalCallToSink(callStmt, sinkStmt, funcSign) :-
+//   CallToSignatureHex(callStmt, funcSign),
+//   StatementUsesMemory_ActualMemoryArg(callStmt, _, _, possiblyTaintedVar),
+//   ExternalCallIsNotOracleOrSink(callStmt, funcSign),
+//   DataFlows(possiblyTaintedVar, taintedVar),
+//   (ERC20TransferCall(sinkStmt, _, taintedVar);ERC20TransferFromCall(sinkStmt, _, _, taintedVar)).
+// .output PartialFlowExternalCallToSink

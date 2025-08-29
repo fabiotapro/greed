@@ -258,7 +258,8 @@ def main(args):
         for state in simgr.stashes['found']:
             print(f"State {state.uuid} has constraints: {state.constraints}")
             print(f"State {state.uuid} | Crossed from_stmt: {state.crossed_from_stmt.id}")
-            print(f"State {state.uuid} | Path constraints: {state.solver.path_constraints[0].dump()}")
+            for i, path_constraint in enumerate(state.solver.path_constraints):
+                print(f"State {state.uuid} | Path constraint {i}: {path_constraint.dump()}")
 
     if args.debug:
         IPython.embed()
