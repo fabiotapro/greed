@@ -4,6 +4,7 @@ from collections import defaultdict
 import csv
 import os
 import importlib.util
+import time
 
 # Load Credentials (credentials.py)
 credentials_path = "/home/fbioribeiro/thesis-tool/config/credentials.py"
@@ -70,8 +71,8 @@ def group_by_creator(creator_info):
         grouped[creator].append(contract)
     return grouped
 
-def download_contract_bytecode(contract_address, folder_path, exploited_project):
-    """Download contract bytecode via Ethereum RPC (QuickNode)."""
+def download_contract_bytecode(contract_address, folder_path):
+    """Download contract bytecode via Ethereum Node."""
     payload = {
         "jsonrpc": "2.0",
         "method": "eth_getCode",
@@ -79,7 +80,7 @@ def download_contract_bytecode(contract_address, folder_path, exploited_project)
         "id": 1
     }
 
-    resp = requests.post(credentials.QUICKNODE_URL, json=payload)
+    resp = requests.post(credentials.INESC_ETH_NODE_URL, json=payload)
     resp.raise_for_status()
     data = resp.json()
     bytecode = data.get("result", "")
@@ -94,14 +95,15 @@ def download_contract_bytecode(contract_address, folder_path, exploited_project)
     return False
 
 # --- MAIN ---
-with open("./dataset/incident.csv", newline="") as f:
+
+with open("./dataset/PM_attack.csv", newline="") as f:
     reader = csv.DictReader(f)
     for row in reader:
-        if row["platform"] == "ETH" and row["transaction"]:
-            print(f"Processing transaction: {row['transaction']} from project {row['exploited_project']}")
-            tx_hash = row["transaction"]
+        if row["Chain"] == "eth" and row["AKTx"]:
+            print(f"Processing transaction: {row['AKTx']} from project {row['DApp']}")
+            tx_hash = row["AKTx"]
 
-            # Get all addresses touched by the transaction via QuickNode
+            # Get all addresses touched by the transaction via Ethereum Node
             all_addresses = get_contracts_in_tx(tx_hash)
 
             if not all_addresses:
@@ -124,28 +126,43 @@ with open("./dataset/incident.csv", newline="") as f:
                     print(f"   {contract}")
 
             # Create project folder
-            project_folder = f"./dataset/{row['exploited_project']}"
+            project_folder = f"./dataset/{row['DApp']}"
             os.makedirs(project_folder, exist_ok=True)
 
             downloaded_contracts = set()
 
-            # Choose group and download contracts
-            chosen_creator = input("Enter the creator address to download contracts: ")
-            if chosen_creator in grouped:
-                contracts_to_download = grouped[chosen_creator]
-                print(f"Downloading contracts for creator {chosen_creator}:")
+            # Track all downloaded contracts
+            for creator, contracts in grouped.items():
+                if row["VicAddress"].lower() in contracts:
+                    print(f"Victim address {row['VicAddress']} found in contracts of creator {creator}.")
+                    print(f"Creator {creator} deployed these contracts:")
 
-                for contract in contracts_to_download:
-                    success = download_contract_bytecode(contract, project_folder, row["exploited_project"])
-                    if success:
-                        downloaded_contracts.add(contract)
-                        print(f"   {contract} downloaded successfully.")
-                    else:
-                        print(f"   {contract} has no bytecode or download failed.")
+                    ## Create a subfolder for each creator
+                    #creator_folder = os.path.join(project_folder, "creator_" + creator)
+                    #os.makedirs(creator_folder, exist_ok=True)
 
-                # Write the downloaded contracts to file (comma-separated, single line)
-                contract_set_file = os.path.join(project_folder, "contract_set.txt")
-                with open(contract_set_file, "w") as f:
-                    f.write(",".join(downloaded_contracts))
-            else:
-                print(f"Creator {chosen_creator} not found.")
+                    downloaded_contracts = set()
+
+                    # Download all contracts for this creator
+                    print(f"Downloading contracts for creator {creator}:")
+                    for contract in contracts:
+                        contract_file = os.path.join(project_folder, f"{contract}.hex")
+
+                        if os.path.exists(contract_file):
+                            downloaded_contracts.add(contract)
+                            print(f"   {contract} already downloaded.")
+                        else:
+                            success = download_contract_bytecode(contract, project_folder)
+                            if success:
+                                downloaded_contracts.add(contract)
+                                print(f"   {contract} downloaded successfully.")
+                            else:
+                                print(f"   {contract} has no bytecode or download failed.")
+
+                    # Write the downloaded contracts to file (comma-separated, single line)
+                    contract_set_file = os.path.join(project_folder, "contract_set.txt")
+                    with open(contract_set_file, "w") as f:
+                        f.write(",".join(downloaded_contracts))
+
+            time.sleep(5)
+    print("Processing complete.")

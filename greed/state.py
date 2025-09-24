@@ -280,8 +280,9 @@ class SymbolicEVMState:
         This method adds a constraint to the state.
         """
         # Here you can inspect the constraints being added to the state.
-        if opt.STATE_STOP_AT_ADDCONSTRAINT in self.options:
+        if opt.STATE_STOP_AT_ADDCONSTRAINT:
             import ipdb; ipdb.set_trace()
+
         self.solver.add_path_constraint(constraint)
 
     # Add here any default plugin that we want to ship

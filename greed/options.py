@@ -92,7 +92,7 @@ OP_AFTER = 1
 
 # Wether we want to drop a debugging interface everytime we 
 # add a constraint to the state.
-STATE_STOP_AT_ADDCONSTRAINT = "STATE_STOP_AT_ADDCONSTRAINT" 
+STATE_STOP_AT_ADDCONSTRAINT = False
 
 
 # SOLVER OPTIONS
