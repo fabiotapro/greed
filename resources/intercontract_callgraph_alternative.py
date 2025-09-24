@@ -50,6 +50,7 @@ class Flow:
     contract_name: str   # e.g., "ContractName"
     from_stmt: str       # e.g., "0x123"
     to_stmt: str         # e.g., "0xabc"
+    amount_var: str      # e.g., "v1ab" or None
 
 
 @dataclass
@@ -277,9 +278,9 @@ def load_files():
         with open("/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/.temp/" + contract_name + "/out/CompleteFlowOracleToSink.csv", newline='') as csvfile:
             reader = csv.reader(csvfile, delimiter='\t')
             for row in reader:
-                if len(row) == 2:
-                    oracle_stmt, sink_stmt = row
-                    complete_flows.append(CompleteFlow("IntraFlowOracleToSink", [Flow("CompleteFlowOracleToSink", contract_name, oracle_stmt, sink_stmt)]))
+                if len(row) == 3:
+                    oracle_stmt, sink_stmt, amount_var = row
+                    complete_flows.append(CompleteFlow("IntraFlowOracleToSink", [Flow("CompleteFlowOracleToSink", contract_name, oracle_stmt, sink_stmt, amount_var)]))
 
         ### Load the Partial flows Oracle -> External Call
         flows_oracle_to_external_call = list()
@@ -321,10 +322,10 @@ def load_files():
         with open("/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/.temp/" + contract_name + "/out/PartialFlowCallDataLoadToSink.csv", newline='') as csvfile:
             reader = csv.reader(csvfile, delimiter='\t')
             for row in reader:
-                if len(row) == 2:
-                    calldataload_stmt, sink_stmt = row
-                    flows_call_data_load_to_sink.append((calldataload_stmt, sink_stmt))
-        
+                if len(row) == 3:
+                    calldataload_stmt, sink_stmt, amount_var = row
+                    flows_call_data_load_to_sink.append((calldataload_stmt, sink_stmt, amount_var))
+
         partial_flows_call_data_load_to_sink[contract_name] = flows_call_data_load_to_sink
 
         ### Load the Partial flows External Call -> Sink
@@ -333,9 +334,9 @@ def load_files():
         with open("/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/.temp/" + contract_name + "/out/PartialFlowExternalCallToSink.csv", newline='') as csvfile:
             reader = csv.reader(csvfile, delimiter='\t')
             for row in reader:
-                if len(row) == 3:
-                    callStmt, sigHash, sinkStmt = row
-                    flows_externalcall_to_sink.append((callStmt, sigHash, sinkStmt))
+                if len(row) == 4:
+                    callStmt, sigHash, sinkStmt, amount_var = row
+                    flows_externalcall_to_sink.append((callStmt, sigHash, sinkStmt, amount_var))
 
         partial_flows_external_call_to_sink[contract_name] = flows_externalcall_to_sink
 
@@ -352,13 +353,13 @@ def recurse_partial_flow_calldataload_to_sink(contract_name, function_entry_bloc
     list_of_flows_lists = list()
 
     for flow in partial_flows_call_data_load_to_sink[contract_name]:
-        calldataload_stmt, sink_stmt = flow
+        calldataload_stmt, sink_stmt, amount_var = flow
 
         # Check if the calldataload statement is in the same function as the function entry block called
         if function_entry_block == in_functions[contract_name][tac_blocks[contract_name][calldataload_stmt]]:
 
             flows_copy = [copy.deepcopy(f) for f in flows]
-            f1 = Flow("PartialFlowCallDataLoadToSink", contract_name, calldataload_stmt, sink_stmt)
+            f1 = Flow("PartialFlowCallDataLoadToSink", contract_name, calldataload_stmt, sink_stmt, amount_var)
             flows_copy.append(f1)
 
             list_of_flows_lists.append(flows_copy)
@@ -381,7 +382,7 @@ def recurse_partial_flow_calldataload_to_external_call(contract_name, function_e
             external_call_function_entry_block = in_functions[contract_name][external_call_block] # Block -> Function entry block
             
             flows_copy = [copy.deepcopy(f) for f in flows]
-            f1 = Flow("PartialFlowCallDataLoadToExternalCall", contract_name, calldataload_stmt, external_stmt)
+            f1 = Flow("PartialFlowCallDataLoadToExternalCall", contract_name, calldataload_stmt, external_stmt, None)
             flows_copy.append(f1)
 
             # Check if any callee belongs to another contract
@@ -448,14 +449,10 @@ def check_partial_flows(contract_name):
 
     # Check complete flows External Call (Oracle) -> Sink
     for flow in partial_flows_external_call_to_sink[contract_name]:
-        callStmt, sigHash, sinkStmt = flow
+        callStmt, sigHash, sinkStmt, amount_var = flow
         
         if sigHash not in all_public_functions and callStmt != sinkStmt:
-            flows = list()
-            f1 = Flow("PartialFlowExternalCallToSink(Oracle->Sink)", contract_name, callStmt, sinkStmt)
-            flows.append(f1)
-
-            complete_flows.append(CompleteFlow("IntraFlowOracleToSink", flows))
+            complete_flows.append(CompleteFlow("IntraFlowOracleToSink", [Flow("PartialFlowExternalCallToSink(Oracle->Sink)", contract_name, callStmt, sinkStmt, amount_var)]))
 
     # Check flows that start with Oracle -> External Call
     for flow in partial_flows_external_call_to_external_call[contract_name]:
@@ -464,7 +461,7 @@ def check_partial_flows(contract_name):
         if firstSigHash not in all_public_functions and secondSigHash in all_public_functions:
 
             flows = list()
-            f1 = Flow("PartialFlowExternalCallToExternalCall(Oracle->ExtCall)", contract_name, firstCallStmt, secondCallStmt)
+            f1 = Flow("PartialFlowExternalCallToExternalCall(Oracle->ExtCall)", contract_name, firstCallStmt, secondCallStmt, None)
             flows.append(f1)
 
             external_call_block = tac_blocks[contract_name][secondCallStmt] # Statement -> Block
@@ -489,10 +486,10 @@ def check_partial_flows(contract_name):
 
     # Check flows that start in External Calls (may receive a manipulated value) and end in sinks
     for flow in partial_flows_external_call_to_sink[contract_name]:
-        callStmt, sigHash, sinkStmt = flow
+        callStmt, sigHash, sinkStmt, amount_var = flow
 
         flows = list()
-        f1 = Flow("PartialFlowExternalCallToSink", contract_name, callStmt, sinkStmt)
+        f1 = Flow("PartialFlowExternalCallToSink", contract_name, callStmt, sinkStmt, amount_var)
         flows.append(f1)
         
         if sigHash in all_public_functions:

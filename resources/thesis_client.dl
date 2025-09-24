@@ -3,15 +3,11 @@
 #include "/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/clientlib/guards.dl"
 #include "/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/clientlib/flows.dl"
 
+/**
+ * Abstractions for the Data flow analysis
+**/
 
-.decl TAC_Use_Variable_Value(callStmt: Statement, var: Variable, i: number, val: symbol)
-TAC_Use_Variable_Value(callStmt, var, i, val) :-
-  CALLStatement(callStmt, _),
-  Statement_Uses(callStmt, var, i),
-  Variable_Value(var, val).
-.output TAC_Use_Variable_Value
-
-.decl CallToSignatureHex(callStmt: Statement, sigHash: symbol)
+.decl CallToSignatureHex(callStmt:Statement, sigHash:symbol)
 CallToSignatureHex(callStmt, sigHash) :- 
   CALLStatement(callStmt, _),
   StatementUsesMemory_ActualMemoryArg(callStmt, _, 0, sigVar),
@@ -19,67 +15,25 @@ CallToSignatureHex(callStmt, sigHash) :-
   sigHash = substr(sigVal, 0, 10).
 .output CallToSignatureHex
 
-.decl CallToSignatureHexOld(callStmt: Statement, selectorHex: symbol)
-CallToSignatureHexOld(callStmt, selectorHex) :-
-  RawSelectorVar(selectorVar, selectorHex),
-  selectorHex != "0xffffffff", // hack for now
-  LocalFlows(selectorVar, actual),
-  StatementUsesMemory_ActualMemoryArg(callStmt, _, 0, actual),
-  CALLStatement(callStmt, _).
-.output CallToSignatureHexOld
-
-.decl RawSelectorVar(var: Variable, selector: symbol)
-RawSelectorVar(var, selector) :-
-  Variable_Value(var, selector),
-  strlen(selector) = 10,
-  substr(selector, 0, 2) = "0x".
-.output RawSelectorVar
-
-.decl CallToSignatureHexExtended(mloadStmt: Statement, callStmt: Statement, selectorVar: Variable, actual: Variable, variableValue: symbol, index: number)
-CallToSignatureHexExtended(mloadStmt, callStmt, selectorVar, actual, variableValue, index) :-
-  StatementLoadsMemory(mloadStmt), // This is an MLOAD(stmt)
-  Statement_Defines(mloadStmt, selectorVar, _),
-  //mloadStmt = "0x1fdS0x74",
-  LocalFlows(selectorVar, actual),
-  //StatementUsesMemory_ActualMemoryArg(callStmt, _, 0, actual),
-  Statement_Uses(callStmt, actual, index),
-  Variable_Value(actual, variableValue),
-  CALLStatement(callStmt, _).
-.output CallToSignatureHexExtended
-
-.decl RawSelectorVarExtended(var: Variable, selectorPrefix: symbol)
-RawSelectorVarExtended(var, selectorPrefix) :-
-  Variable_Value(var, fullVal),
-  strlen(fullVal) >= 10,
-  substr(fullVal, 0, 10) = selectorPrefix,
-  substr(selectorPrefix, 0, 2) = "0x".
-.output RawSelectorVarExtended
-
-/**
- * Abstractions for the Data flow analysis
-**/
-
-.decl CallToOracle(sourceStmt: Statement)
-
+.decl CallToOracle(sourceStmt:Statement)
 CallToOracle(sourceStmt):-
-  (CallToSignatureHex(sourceStmt, "0x0902f1ac");             // getReserves()
-  CallToSignatureHex(sourceStmt, "0xfc57d4df");              // getUnderlyingPrice(address)
-  CallToSignatureHex(sourceStmt, "0x809a9e55");             // getExpectedRate(address,address,uint256)
-  CallToSignatureHex(sourceStmt, "0x49f9b0f7")).             // calculateSaleReturn(uint256,uint256,uint32,uint256)
+  (CallToSignatureHex(sourceStmt, "0x0902f1ac");    // getReserves()
+  CallToSignatureHex(sourceStmt, "0xfc57d4df");     // getUnderlyingPrice(address)
+  CallToSignatureHex(sourceStmt, "0x809a9e55");     // getExpectedRate(address,address,uint256)
+  CallToSignatureHex(sourceStmt, "0x49f9b0f7")).    // calculateSaleReturn(uint256,uint256,uint32,uint256)
 
 
-.decl ExternalCallIsNotOracleOrSink(callStmt: Statement, funcSign: symbol)
-
+.decl ExternalCallIsNotOracleOrSink(callStmt:Statement, funcSign:symbol)
 ExternalCallIsNotOracleOrSink(callStmt, funcSign):-
   CallToSignatureHex(callStmt, funcSign),
   // Oracles
-  funcSign != "0x0902f1ac", // getReserves()
-  funcSign != "0xfc57d4df", // getUnderlyingPrice(address)
-  funcSign != "0x809a9e55", // getExpectedRate(address,address,uint256)
-  funcSign != "0x49f9b0f7", // calculateSaleReturn(uint256,uint256,uint32,uint256)
+  funcSign != "0x0902f1ac",    // getReserves()
+  funcSign != "0xfc57d4df",    // getUnderlyingPrice(address)
+  funcSign != "0x809a9e55",    // getExpectedRate(address,address,uint256)
+  funcSign != "0x49f9b0f7",    // calculateSaleReturn(uint256,uint256,uint32,uint256)
   // Sinks
-  funcSign != "0xa9059cbb", // transfer(address,uint256)
-  funcSign != "0x23b872dd". // transferFrom(address,address,uint256)
+  funcSign != "0xa9059cbb",    // transfer(address,uint256)
+  funcSign != "0x23b872dd".    // transferFrom(address,address,uint256)
 
 /**
  * Data flow analysis for price manipulation vulnerabilities for the Gigahorse toolchain
@@ -88,12 +42,12 @@ ExternalCallIsNotOracleOrSink(callStmt, funcSign):-
 /**
  * Complete flow from Oracle to Sink
 **/
-.decl CompleteFlowOracleToSink(sourceStmt:Statement, sinkStmt:Statement)
-CompleteFlowOracleToSink(sourceStmt, sinkStmt) :-
+.decl CompleteFlowOracleToSink(sourceStmt:Statement, sinkStmt:Statement, amount:Variable)
+CompleteFlowOracleToSink(sourceStmt, sinkStmt, amount) :-
   CallToOracle(sourceStmt),
   ExternalCall_ActualReturn(sourceStmt, priceVar, _), // taint all variables for now (more info on actual_vars on memory_modeling_api.dl)
-  DataFlows(priceVar, taintedVar), // propagate flow
-  (ERC20TransferCall(sinkStmt, _, taintedVar);ERC20TransferFromCall(sinkStmt, _, _, taintedVar)).
+  DataFlows(priceVar, amount), // propagate flow
+  (ERC20TransferCall(sinkStmt, _, amount);ERC20TransferFromCall(sinkStmt, _, _, amount)).
 .output CompleteFlowOracleToSink
 
 /**
@@ -115,22 +69,11 @@ PartialFlowOracleToExternalCall(sourceStmt, callStmt, funcSign) :-
 .decl PartialFlowExternalCallToExternalCall(firstCallStmt:Statement, firstSigHash:symbol, secondCallStmt:Statement, secondSigHash:symbol)
 PartialFlowExternalCallToExternalCall(firstCallStmt, firstSigHash, secondCallStmt, secondSigHash) :-
   CallToSignatureHex(firstCallStmt, firstSigHash),
-  ExternalCall_ActualReturn(firstCallStmt, priceVar, _),
-  DataFlows(priceVar, taintedVar),
+  ExternalCall_ActualReturn(firstCallStmt, possiblyTaintedVar, _),
+  DataFlows(possiblyTaintedVar, taintedVar),
   CallToSignatureHex(secondCallStmt, secondSigHash),
-  StatementUsesMemory_ActualMemoryArg(secondCallStmt, _, _, taintedVar). // statement uses taintedVar
-  //ExternalCallIsNotOracleOrSink(secondCallStmt, secondSigHash).
+  StatementUsesMemory_ActualMemoryArg(secondCallStmt, _, _, taintedVar).
 .output PartialFlowExternalCallToExternalCall
-
-/**
- * Partial flow from CALLDATALOAD to Sink
-**/
-.decl PartialFlowCallDataLoadToSink(sourceStmt:Statement, sinkStmt:Statement)
-PartialFlowCallDataLoadToSink(sourceStmt, sinkStmt) :-
-  CALLDATALOAD(sourceStmt, _, dataInputSrcVar),
-  DataFlows(dataInputSrcVar, taintedVar),
-  (ERC20TransferCall(sinkStmt, _, taintedVar);ERC20TransferFromCall(sinkStmt, _, _, taintedVar)).
-.output PartialFlowCallDataLoadToSink
 
 /**
  * Partial flow from CALLDATALOAD to ExternalCall
@@ -140,18 +83,27 @@ PartialFlowCallDataLoadToExternalCall(sourceStmt, callStmt, funcSign) :-
   CALLDATALOAD(sourceStmt, _, dataInputSrcVar),
   DataFlows(dataInputSrcVar, taintedVar),
   CallToSignatureHex(callStmt, funcSign),
-  StatementUsesMemory_ActualMemoryArg(callStmt, _, _, taintedVar), // statement uses taintedVar
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, _, taintedVar),
   ExternalCallIsNotOracleOrSink(callStmt, funcSign).
 .output PartialFlowCallDataLoadToExternalCall
 
 /**
+ * Partial flow from CALLDATALOAD to Sink
+**/
+.decl PartialFlowCallDataLoadToSink(sourceStmt:Statement, sinkStmt:Statement, amount:Variable)
+PartialFlowCallDataLoadToSink(sourceStmt, sinkStmt, amount) :-
+  CALLDATALOAD(sourceStmt, _, dataInputSrcVar),
+  DataFlows(dataInputSrcVar, amount),
+  (ERC20TransferCall(sinkStmt, _, amount);ERC20TransferFromCall(sinkStmt, _, _, amount)).
+.output PartialFlowCallDataLoadToSink
+
+/**
  * Partial flow from ExternalCall to Sink
 **/
-.decl PartialFlowExternalCallToSink(callStmt:Statement, sigHash:symbol, sinkStmt:Statement)
-PartialFlowExternalCallToSink(callStmt, sigHash, sinkStmt) :-
+.decl PartialFlowExternalCallToSink(callStmt:Statement, sigHash:symbol, sinkStmt:Statement, amount:Variable)
+PartialFlowExternalCallToSink(callStmt, sigHash, sinkStmt, amount) :-
   CallToSignatureHex(callStmt, sigHash),
   ExternalCall_ActualReturn(callStmt, possiblyTaintedVar, _),
-  //ExternalCallIsNotOracleOrSink(callStmt, sigHash),
-  DataFlows(possiblyTaintedVar, taintedVar),
-  (ERC20TransferCall(sinkStmt, _, taintedVar);ERC20TransferFromCall(sinkStmt, _, _, taintedVar)).
+  DataFlows(possiblyTaintedVar, amount),
+  (ERC20TransferCall(sinkStmt, _, amount);ERC20TransferFromCall(sinkStmt, _, _, amount)).
 .output PartialFlowExternalCallToSink

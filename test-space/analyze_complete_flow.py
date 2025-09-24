@@ -4,6 +4,7 @@ import logging
 import json
 import csv
 from collections import defaultdict
+import os
 
 import IPython
 
@@ -145,6 +146,15 @@ def get_reachable_callers(target_function_block):
     #reachable_callers.discard(target_function_block)  # do we want to exclude the target itself ? not for now, i think
     return reachable_callers
 
+def to_greed_variable_format(var):
+    """
+    Converts a variable name to the format used in Greed's TAC statements.
+    Example: "0x123V0xabc" -> "v122Vabc"
+    """
+    if var is not None:
+        return 'v' + var.replace('0x', '')
+    else:
+        return None
 
 def main(args):
 
@@ -161,11 +171,13 @@ def main(args):
             contract_name = flow["contract_name"]
             from_stmt = flow["from_stmt"]
             to_stmt = flow["to_stmt"]
+            amount_var = flow["amount_var"]
+        break  # only the first one for now
 
-    # DEBUG: MANUAL
-    contract_name = "3_0x5ad"
-    from_stmt = "0x1313"
-    to_stmt = "0x1c15"
+    # # DEBUG: MANUAL
+    # contract_name = "3_0x5ad"
+    # from_stmt = "0x1313"
+    # to_stmt = "0x1c15"
         
     print("Contract name:" + contract_name)
     print("From statement:" + from_stmt)
@@ -253,13 +265,19 @@ def main(args):
     else:
         simgr.run(find=find_to_stmt, prune=prune_irrelevant_functions)
         print(f"FINISHED!")
-
-        # Constraints
+        
+        # Amount constraint
         for state in simgr.stashes['found']:
-            print(f"State {state.uuid} has constraints: {state.constraints}")
-            print(f"State {state.uuid} | Crossed from_stmt: {state.crossed_from_stmt.id}")
-            for i, path_constraint in enumerate(state.solver.path_constraints):
-                print(f"State {state.uuid} | Path constraint {i}: {path_constraint.dump()}")
+            # #print(f"State {state.uuid} has constraints: {state.constraints}")
+            # print(f"State {state.uuid} | Crossed from_stmt: {state.crossed_from_stmt.id}")
+            # print("-----------")
+            # print("-----------")
+            # for i, path_constraint in enumerate(state.solver.path_constraints):
+            #     print(f"State {state.uuid} | Path constraint {i}: {path_constraint.dump()}")
+            amount_var_formatted = to_greed_variable_format(amount_var)
+            if amount_var is not None and amount_var_formatted in state.registers:
+                amount_val = state.registers[amount_var_formatted]
+                print(f"State {state.uuid} | Amount variable {amount_var_formatted} | Value: {amount_val}")
 
     if args.debug:
         IPython.embed()
@@ -268,7 +286,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument("target", type=str, action="store", help="Path to Gigahorse output folder")
-    parser.add_argument("contracts_str", type=str, action="store", help="Comma-separated list of the names of the contracts to analyze")
+    parser.add_argument("project_folder_path", type=str, help="Path to the project folder")
     parser.add_argument("--address", type=str, action="store", help="Address of the contract")
     parser.add_argument("--find", type=str, action="store", help="Target code address")
     parser.add_argument("--partial-concrete-storage", dest="partial_concrete_storage", action="store_true", help="Enable partial concrete storage")
@@ -276,8 +294,14 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    project_folder = args.project_folder_path
+    contract_set_file = os.path.join(project_folder, "contract_set.txt")
+
+    with open(contract_set_file, "r") as f:
+        contract_string = f.read().strip()
+
     global contract_set
-    contract_set = set(args.contracts_str.split(','))
+    contract_set = set(contract_string.split(','))
 
     # setup logging
     if args.debug:
