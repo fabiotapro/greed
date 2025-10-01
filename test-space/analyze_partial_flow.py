@@ -4,7 +4,7 @@ import logging
 import json
 import csv
 from collections import defaultdict
-import os
+
 
 import IPython
 
@@ -14,6 +14,7 @@ from greed import Project
 from greed.state import SymbolicEVMState
 from greed import options
 from greed.exploration_techniques import DirectedSearch, Prioritizer
+from greed.solver.yices2 import YicesTermBV, YicesTermBVS
 from greed.solver.shortcuts import *
 from greed.utils.extra import gen_exec_id
 from greed.utils.files import load_csv_map, load_csv_multimap
@@ -24,11 +25,14 @@ logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
 log = logging.getLogger("greed")
 
 # Global variables
-complete_flows = None
+#complete_flows = None
 per_contract_reverse_call_graphs = defaultdict()  # Maps contract name to its reverse call graph
 
+public_functions = dict() # PublicFunction.csv
 tac_blocks = dict()  # Maps contract name to a dictionary of statement to TAC block
 in_functions = dict()  # Maps contract name to a dictionary of block to function entry block
+
+all_public_functions = set() # Set of all public functions across all contracts
 
 
 def prune_irrelevant_functions(state: SymbolicEVMState) -> bool:
@@ -71,7 +75,7 @@ def find_to_stmt(state: SymbolicEVMState) -> bool:
     """
     Find the target "to_stmt" in the state.
     """
-    if state.curr_stmt.id == state.project.to_stmt:
+    if state.curr_stmt.id == state.project.to_stmt and state.has_crossed_from_stmt:
         print(f"Found target statement {state.curr_stmt.id} in state {state.uuid}. Has crossed from_stmt? {state.has_crossed_from_stmt}")
         return True
     return False
@@ -80,12 +84,6 @@ def load_files():
     """
     Loads the necessary files, from the Gigahorse analysis, for each contract.
     """
-
-    ### Load the complete flows
-    with open("/home/fbioribeiro/thesis-tool/greed/resources/complete_flows.json", "r") as f:
-        global complete_flows
-        complete_flows = json.load(f)
-
     
     ### Load the per_contract_reverse_call_graphs
     with open("/home/fbioribeiro/thesis-tool/greed/resources/per_contract_reverse_call_graphs.json", "r") as f:
@@ -102,6 +100,18 @@ def load_files():
     }
 
     for contract_name in contract_set:
+        
+        ### Load the public functions
+        entry_block_to_function = dict()
+
+        with open("/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/.temp/" + contract_name + "/out/PublicFunction.csv", newline='') as csvfile:
+            reader = csv.reader(csvfile, delimiter='\t')
+            for row in reader:
+                if len(row) == 2:
+                    entry_block, function_name = row
+                    entry_block_to_function[entry_block] = function_name
+        
+        public_functions[contract_name] = entry_block_to_function
 
         ### Load the TAC_Block's
         statement_to_block = dict()
@@ -156,28 +166,73 @@ def to_greed_variable_format(var):
     else:
         return None
 
+def traverse_term(term, depth=0):
+    indent = "  " * depth
+    # Check if this is a BV before calling is_concrete
+    if isinstance(term, YicesTermBV):
+        concrete = is_concrete(term)
+    else:
+        concrete = False
+
+    print(f"{indent}- {term} | concrete={concrete} | type={type(term)}")
+
+    # Recurse over children if present
+    if hasattr(term, "children") and term.children:
+        for child in term.children:
+            traverse_term(child, depth + 1)
+
+def count_oracle_vars(term):
+    """
+    Recursively traverse a YicesTerm AST and count symbolic variables 
+    that came from oracle reads (marked with 'ORACLE' in their name).
+    """
+    count = 0
+
+    seen_oracles = set() # Identified by the oracle's statements
+
+    # Check if this term is a symbolic variable (leaf)
+    if isinstance(term, YicesTermBVS):
+        if "ORACLE" in term.name:
+            oracle_stmt = term.name.split("_")[7]
+            selector = term.name.split("_")[10]
+            
+            # Oracle verification (check if indeed from outside the protocol and unique)
+            if selector not in all_public_functions and oracle_stmt not in seen_oracles:
+                count += 1
+                seen_oracles.add(oracle_stmt)
+
+    # Recurse into children
+    if hasattr(term, 'children') and term.children:
+        for child in term.children:
+            count += count_oracle_vars(child)
+
+    return count
+
+
 def main(args):
+
+    global contract_set
+    contract_string = args.contract_string.strip()
+    contract_set = set(contract_string.split(','))
+
+    contract_name = args.target.strip("/").split("/")[-1]
+    print("split: ", contract_name)
+    from_stmt = args.from_stmt
+    to_stmt = args.to_stmt
+    amount_var = args.amount_var
 
     load_files()
 
-    contract_name = None
-    from_stmt = None
-    to_stmt = None
-
-    # Traverse the complete flows (for now we only analyze the first one)
-    for complete_flow in complete_flows:
-        if complete_flow["flow_type"] == "IntraFlowOracleToSink":
-            flow = complete_flow["flows"][0]
-            contract_name = flow["contract_name"]
-            from_stmt = flow["from_stmt"]
-            to_stmt = flow["to_stmt"]
-            amount_var = flow["amount_var"]
-        break  # only the first one for now
+    # Populate all_public_functions
+    for contract in contract_set:
+        for entry_block, function_name in public_functions[contract].items():
+            all_public_functions.add(function_name)
 
     # # DEBUG: MANUAL
     # contract_name = "3_0x5ad"
     # from_stmt = "0x1313"
     # to_stmt = "0x1c15"
+    # amount_var = "v123Vabc"
         
     print("Contract name:" + contract_name)
     print("From statement:" + from_stmt)
@@ -186,9 +241,6 @@ def main(args):
 
     print(f"Reachable callers for {from_block}: ")
     print(reachable_callers)
-
-    # TODO: look at state, project, etc. to continue to perform selective symbolic execution
-    # until the "from_stmt" and then test how to proceed until the "to_stmt"
 
     p = Project(target_dir=args.target, contract_name=contract_name, relevant_functions=reachable_callers, from_stmt=from_stmt, to_stmt=to_stmt)
     xid = gen_exec_id()
@@ -268,16 +320,24 @@ def main(args):
         
         # Amount constraint
         for state in simgr.stashes['found']:
-            # #print(f"State {state.uuid} has constraints: {state.constraints}")
-            # print(f"State {state.uuid} | Crossed from_stmt: {state.crossed_from_stmt.id}")
-            # print("-----------")
-            # print("-----------")
-            # for i, path_constraint in enumerate(state.solver.path_constraints):
-            #     print(f"State {state.uuid} | Path constraint {i}: {path_constraint.dump()}")
             amount_var_formatted = to_greed_variable_format(amount_var)
             if amount_var is not None and amount_var_formatted in state.registers:
                 amount_val = state.registers[amount_var_formatted]
                 print(f"State {state.uuid} | Amount variable {amount_var_formatted} | Value: {amount_val}")
+
+                # Debug: traverse the term and print AST
+                #traverse_term(amount_val)
+
+                # First rule -> Only one oracle?
+                print("Nr. of oracle vars:", count_oracle_vars(amount_val))
+                if count_oracle_vars(amount_val) <= 1:
+                    print("Amount constraint rule not met (<= 1 oracle var).")
+                    # exit(2)
+
+                # Second rule -> Try to give bigger values and check satisfiablity
+                # TODO: implement second rule function
+
+        # exit(0)
 
     if args.debug:
         IPython.embed()
@@ -286,7 +346,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument("target", type=str, action="store", help="Path to Gigahorse output folder")
-    parser.add_argument("project_folder_path", type=str, help="Path to the project folder")
+    parser.add_argument("contract_string", type=str, help="Contract set string (e.g., \"contractA,contractB\")")
+    parser.add_argument("from_stmt", type=str, help="From statement (e.g., \"0x1234\")")
+    parser.add_argument("to_stmt", type=str, help="To statement (e.g., \"0x5678\")")
+    parser.add_argument("calldataload_var", type=str, help="Calldata load variable (e.g., \"v123Vabc\")")
+    parser.add_argument("amount_var", type=str, help="Amount variable (e.g., \"v123Vabc\")")
     parser.add_argument("--address", type=str, action="store", help="Address of the contract")
     parser.add_argument("--find", type=str, action="store", help="Target code address")
     parser.add_argument("--partial-concrete-storage", dest="partial_concrete_storage", action="store_true", help="Enable partial concrete storage")
@@ -294,14 +358,11 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    project_folder = args.project_folder_path
-    contract_set_file = os.path.join(project_folder, "contract_set.txt")
-
-    with open(contract_set_file, "r") as f:
-        contract_string = f.read().strip()
-
-    global contract_set
-    contract_set = set(contract_string.split(','))
+    print(f"Target: {args.target}")
+    print(f"Contract String: {args.contract_string}")
+    print(f"From Statement: {args.from_stmt}")
+    print(f"To Statement: {args.to_stmt}")
+    print(f"Amount Variable: {args.amount_var}")
 
     # setup logging
     if args.debug:
