@@ -221,7 +221,7 @@ class LambdaMemory:
         self.root_lambda_constraint.following_writes[index] = v
         self._base = Array_Store(self._base, index, v)
 
-    def readn(self, index, n):
+    def readn(self, index, n, call_info=None):
         """
         Read n bytes from the memory at a specific index.
         Args:
@@ -250,7 +250,12 @@ class LambdaMemory:
         else:
             vv = []
             if is_concrete(index):
-                tag = f"READN_{self.tag}_BASE{self._base.id}_{bv_unsigned_value(index)}_{n_val}"
+
+                if call_info is not None:
+                    tag = f"READN_{self.tag}_BASE{self._base.id}_{bv_unsigned_value(index)}_{n_val}_ORACLE_{call_info[0]}_{call_info[1]}_{call_info[2]}_{call_info[3]}"
+                    
+                else:
+                    tag = f"READN_{self.tag}_BASE{self._base.id}_{bv_unsigned_value(index)}_{n_val}"
 
                 # Optimization: attempt to read in word-size chunks, which is more cache-friendly
                 index_val = bv_unsigned_value(index)
@@ -263,7 +268,12 @@ class LambdaMemory:
                         for pos in range(idx, min(idx + 32, index_val + n_val)):
                             vv.append(self[BVV(pos, 256)])
             else:
-                tag = f"READN_{self.tag}_BASE{self._base.id}_sym{index.id}_{n_val}"
+                if call_info is not None:
+                    tag = f"READN_{self.tag}_BASE{self._base.id}_sym{index.id}_{n_val}_ORACLE_{call_info[0]}_{call_info[1]}_{call_info[2]}_{call_info[3]}"
+                    
+                else:
+                    tag = f"READN_{self.tag}_BASE{self._base.id}_sym{index.id}_{n_val}"
+                
                 vv = list()
                 for i in range(n_val):
                     read_index = BV_Add(index, BVV(i, 256))

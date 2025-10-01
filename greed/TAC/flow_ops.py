@@ -107,6 +107,10 @@ class TAC_BaseCall(TAC_Statement):
         ostart = retOffset_val
         olen = retSize_val
 
+        # Store this call into the external call queue if something was returned
+        if bv_unsigned_value(olen) > 0:
+            state.external_call_queue.append((state.curr_stmt.id, bv_unsigned_value(ostart), address_val, state.call_statement_to_signature[state.curr_stmt.id]))
+
         state.returndata['size'] = olen
         state.returndata['instruction_count'] = state.instruction_count
         

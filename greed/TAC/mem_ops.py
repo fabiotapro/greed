@@ -51,6 +51,15 @@ class TAC_Mload(TAC_Statement):
 
     @TAC_Statement.handler_with_side_effects
     def handle(self, state: SymbolicEVMState):
+
+        for i, call_info in enumerate(state.external_call_queue):
+            if bv_unsigned_value(self.offset_val) == call_info[1]:
+                state.external_call_queue.pop(i)
+                state.registers[self.res1_var] = state.memory.readn(self.offset_val, BVV(32, 256), call_info)
+                
+                state.set_next_pc()
+                return [state]
+
         state.registers[self.res1_var] = state.memory.readn(self.offset_val, BVV(32, 256))
 
         state.set_next_pc()
