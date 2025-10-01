@@ -1,6 +1,7 @@
 import datetime
 import logging
 import typing
+import csv
 
 from greed import options as opt
 from greed.memory import LambdaMemory, PartialConcreteStorage
@@ -34,11 +35,15 @@ class SymbolicEVMState:
     registers: typing.Dict[str, typing.Any]
 
     # thesis variables
-    prev_function_entry_block: str = "0x0"
-    curr_function_entry_block: str = "0x0"
-    pruning_already_checked: bool = False
-    has_crossed_from_stmt: bool = False
-    crossed_from_stmt: "TAC_Statement" = None  # the from_stmt crossed
+    prev_function_entry_block: str
+    curr_function_entry_block: str
+    pruning_already_checked: bool
+    has_crossed_from_stmt: bool
+    crossed_from_stmt: "TAC_Statement"  # the from_stmt crossed
+    call_statement_to_signature: dict  # map from call statements to their signatures
+    external_call_queue: list  # queue of external calls waiting for a corresponding mload
+    calldataload_var: str # the var to put the previous output var
+    previous_output_var_val: str  # the output var of the previous partial flow
 
     # default plugins
     solver: SimStateSolver
@@ -46,7 +51,7 @@ class SymbolicEVMState:
     inspect: SimStateInspect
 
 
-    def __init__(self, xid, project, partial_init=False, init_ctx=None, options=None, max_calldatasize=None, partial_concrete_storage=False):
+    def __init__(self, xid, project, partial_init=False, init_ctx=None, options=None, max_calldatasize=None, partial_concrete_storage=False, calldataload_var=None, previous_output_var_val=None):
         """
         Args:
             xid: The execution id 
@@ -107,6 +112,25 @@ class SymbolicEVMState:
         else:
             log.debug("Using PartialConcreteStorage")
             self.storage = PartialConcreteStorage(tag=f"PCONCR_STORAGE_{self.xid}", value_sort=BVSort(256), state=self)
+
+        # Initialize the thesis variables
+        self.prev_function_entry_block = "0x0"
+        self.curr_function_entry_block = "0x0"
+        self.pruning_already_checked = True
+        self.has_crossed_from_stmt = False
+        self.crossed_from_stmt = None
+        self.call_statement_to_signature = {}
+        self.external_call_queue = []
+        self.calldataload_var = calldataload_var
+        self.previous_output_var_val = previous_output_var_val
+
+        # Load the external call's signatures map
+        with open("/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/.temp/" + self.project.contract_name + "/out/CallToSignatureHex.csv", newline='') as csvfile:
+            reader = csv.reader(csvfile, delimiter='\t')
+            for row in reader:
+                if len(row) == 2:
+                    statement, external_call_signature = row
+                    self.call_statement_to_signature[statement] = external_call_signature
 
     def set_init_ctx(self, init_ctx=None):
         """
@@ -347,6 +371,10 @@ class SymbolicEVMState:
         new_state.pruning_already_checked = self.pruning_already_checked
         new_state.has_crossed_from_stmt = self.has_crossed_from_stmt
         new_state.crossed_from_stmt = self.crossed_from_stmt
+        new_state.call_statement_to_signature = self.call_statement_to_signature
+        new_state.external_call_queue = list(self.external_call_queue)
+        new_state.calldataload_var = self.calldataload_var
+        new_state.previous_output_var_val = self.previous_output_var_val
 
         new_state.active_plugins = dict()
         # Copy all the plugins

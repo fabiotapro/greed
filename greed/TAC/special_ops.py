@@ -191,10 +191,13 @@ class TAC_Calldataload(TAC_Statement):
     @TAC_Statement.handler_with_side_effects
     def handle(self, state: SymbolicEVMState):
         # WARNING: According to the EVM specification if your CALLDATA is less than 32 bytes, you read zeroes.
-        
-        calldataload_res = state.calldata.readn(self.byte_offset_val, BVV(32, 256))
 
-        state.registers[self.res1_var] = calldataload_res
+        if state.calldataload_var is not None and self.res1_var == state.calldataload_var:
+            state.registers[self.res1_var] = state.previous_output_var_val
+        else:
+            calldataload_res = state.calldata.readn(self.byte_offset_val, BVV(32, 256))
+
+            state.registers[self.res1_var] = calldataload_res
 
         log.debug("CALLDATALOAD:" +
                   str({v: bv_unsigned_value(k) if is_concrete(k) else "<SYMBOL>" for v, k in self.arg_vals.items()}) +

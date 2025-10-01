@@ -31,8 +31,8 @@ class Factory:
     def simgr(self, entry_state: SymbolicEVMState) -> SimulationManager:
         return SimulationManager(entry_state=entry_state, project=self.project)
 
-    def entry_state(self, xid: str, init_ctx: dict = None, options: dict = None, max_calldatasize: int = None, partial_concrete_storage: bool = False) -> SymbolicEVMState:
-        state = SymbolicEVMState(xid=xid, project=self.project, init_ctx=init_ctx, options=options, max_calldatasize=max_calldatasize, partial_concrete_storage=partial_concrete_storage)
+    def entry_state(self, xid: str, init_ctx: dict = None, options: dict = None, max_calldatasize: int = None, partial_concrete_storage: bool = False, calldataload_var=None, previous_output_var_val=None) -> SymbolicEVMState:
+        state = SymbolicEVMState(xid=xid, project=self.project, init_ctx=init_ctx, options=options, max_calldatasize=max_calldatasize, partial_concrete_storage=partial_concrete_storage, calldataload_var=calldataload_var, previous_output_var_val=previous_output_var_val)
         state.pc = self.block('0x0').first_ins.id
         return state
 
