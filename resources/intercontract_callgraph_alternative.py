@@ -66,6 +66,8 @@ def export_to_graphviz_pdf():
     """
     dot_file = f"/home/fbioribeiro/thesis-tool/greed/resources/intercontract_callgraph.dot"
     pdf_file = f"/home/fbioribeiro/thesis-tool/greed/resources/intercontract_callgraph.pdf"
+    png_file = f"/home/fbioribeiro/thesis-tool/greed/resources/intercontract_callgraph.png"
+    svg_file = f"/home/fbioribeiro/thesis-tool/greed/resources/intercontract_callgraph.svg"
 
     # Assign random colors to each contract
     def random_color():
@@ -114,6 +116,20 @@ def export_to_graphviz_pdf():
         print(f"Graph exported to: {pdf_file}")
     except subprocess.CalledProcessError as e:
         print("Error while generating PDF with dot:", e)
+
+    # Export to PNG
+    try:
+        subprocess.run(["dot", "-Tpng", dot_file, "-o", png_file], check=True)
+        print(f"Graph exported to: {png_file}")
+    except subprocess.CalledProcessError as e:
+        print("Error while generating PNG with dot:", e)
+
+    # Export to SVG
+    try:
+        subprocess.run(["dot", "-Tsvg", dot_file, "-o", svg_file], check=True)
+        print(f"Graph exported to: {svg_file}")
+    except subprocess.CalledProcessError as e:
+        print("Error while generating SVG with dot:", e)
 
 def export_call_graphs_to_json():
     """
@@ -275,25 +291,25 @@ def load_files():
 
         in_functions[contract_name] = block_to_function_entry_block
 
-        ### Load the Complete flows Oracle -> Sink
-        with open("/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/.temp/" + contract_name + "/out/CompleteFlowOracleToSink.csv", newline='') as csvfile:
-            reader = csv.reader(csvfile, delimiter='\t')
-            for row in reader:
-                if len(row) == 3:
-                    oracle_stmt, sink_stmt, amount_var = row
-                    complete_flows.append(CompleteFlow("IntraFlowOracleToSink", [Flow("CompleteFlowOracleToSink", contract_name, oracle_stmt, sink_stmt, None, amount_var)]))
+        # ### Load the Complete flows Oracle -> Sink
+        # with open("/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/.temp/" + contract_name + "/out/CompleteFlowOracleToSink.csv", newline='') as csvfile:
+        #     reader = csv.reader(csvfile, delimiter='\t')
+        #     for row in reader:
+        #         if len(row) == 3:
+        #             oracle_stmt, sink_stmt, amount_var = row
+        #             complete_flows.append(CompleteFlow("IntraFlowOracleToSink", [Flow("CompleteFlowOracleToSink", contract_name, oracle_stmt, sink_stmt, None, amount_var)]))
 
-        ### Load the Partial flows Oracle -> External Call
-        flows_oracle_to_external_call = list()
+        # ### Load the Partial flows Oracle -> External Call
+        # flows_oracle_to_external_call = list()
 
-        with open("/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/.temp/" + contract_name + "/out/PartialFlowOracleToExternalCall.csv", newline='') as csvfile:
-            reader = csv.reader(csvfile, delimiter='\t')
-            for row in reader:
-                if len(row) == 4:
-                    oracle_stmt, external_stmt, external_sig, taintedVar = row
-                    flows_oracle_to_external_call.append((oracle_stmt, external_stmt, external_sig, taintedVar))
+        # with open("/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/.temp/" + contract_name + "/out/PartialFlowOracleToExternalCall.csv", newline='') as csvfile:
+        #     reader = csv.reader(csvfile, delimiter='\t')
+        #     for row in reader:
+        #         if len(row) == 4:
+        #             oracle_stmt, external_stmt, external_sig, taintedVar = row
+        #             flows_oracle_to_external_call.append((oracle_stmt, external_stmt, external_sig, taintedVar))
 
-        partial_flows_oracle_to_external_call[contract_name] = flows_oracle_to_external_call
+        # partial_flows_oracle_to_external_call[contract_name] = flows_oracle_to_external_call
 
         ### Load the Partial flows External Call -> External Call
         flows_externalcall_to_externalcall = list()
@@ -423,7 +439,7 @@ def recurse_and_look_for_oracle_call(contract_name, function_entry_block):
 
     # Recurse on partial flows from calldataload to external call
     for flow in partial_flows_call_data_load_to_external_call[contract_name]:
-            calldataload_stmt, external_stmt, external_sig = flow
+            calldataload_stmt, calldataload_var, external_stmt, external_sig, taintedVar = flow
 
             # Check if the calldataload statement is in the same function as the function entry block called
             if function_entry_block == in_functions[contract_name][tac_blocks[contract_name][calldataload_stmt]]:
@@ -501,10 +517,13 @@ def check_partial_flows(contract_name):
             for callee in intercontract_call_graph[compose_function_name(contract_name, external_call_function_entry_block)]:
                 callee_contract_name, callee_entry_block = callee.split("::")
 
-                if callee_contract_name != contract_name and secondSigHash == public_functions[callee_contract_name][callee_entry_block]:
+                if callee_contract_name != contract_name and sigHash == public_functions[callee_contract_name][callee_entry_block]:
                     
-                    if recurse_and_look_for_oracle_call(callee_contract_name, callee_entry_block):
-                        list_of_flows_lists.extend([flows])
+                    try:
+                        if recurse_and_look_for_oracle_call(callee_contract_name, callee_entry_block):
+                            list_of_flows_lists.extend([flows])
+                    except Exception as e:
+                        print(f"Error while recursing for oracle. Ignoring possible flow. Error: {e}")
 
     # Save all Complete Flows
     for flows_list in list_of_flows_lists:
