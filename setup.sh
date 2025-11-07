@@ -173,9 +173,9 @@ if [ -z $NO_GIGAHORSE ]; then
     mv $GIGAHORSE_DIR/clients/$1_compiled.tmp.cpp $GIGAHORSE_DIR/clients/$1_compiled.cpp &&
     echo "Successfully compiled $1.."
   }
-  #compile "main.dl" "logic/main.dl"
-  #compile "analytics_client.dl" "clients/analytics_client.dl"
-  #compile "greed_client.dl" "clientlib/greed_client.dl"
+  compile "main.dl" "logic/main.dl"
+  compile "analytics_client.dl" "clients/analytics_client.dl"
+  compile "greed_client.dl" "clientlib/greed_client.dl"
   compile "thesis_client.dl" "clientlib/thesis_client.dl"
 else
   true
