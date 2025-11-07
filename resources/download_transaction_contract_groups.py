@@ -17,7 +17,7 @@ ETHEREUM_PROVIDER = Web3.HTTPProvider(credentials.INESC_ETH_NODE_URL, request_kw
 
 # --- Functions ---
 def get_contracts_in_tx(tx_hash):
-    """Fetch all addresses touched by a transaction using QuickNode traces."""
+    """Fetch all addresses touched by a transaction."""
     traces = ETHEREUM_PROVIDER.make_request("trace_transaction", [tx_hash])
 
     if 'error' in traces:
