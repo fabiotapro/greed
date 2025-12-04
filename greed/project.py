@@ -24,7 +24,7 @@ class Project(object):
 
     relevant_functions: set
 
-    def __init__(self, target_dir: str, contract_name: str = None, relevant_functions: set = None, from_stmt=None, to_stmt=None):
+    def __init__(self, target_dir: str, project_name:str = None, contract_name: str = None, relevant_functions: set = None, from_stmt=None, to_stmt=None):
         """
         Args:
             target_dir: The directory containing the contract.hex file and 
@@ -41,6 +41,7 @@ class Project(object):
         self.block_at = self.tac_parser.parse_blocks()
         self.function_at = self.tac_parser.parse_functions()
         self.relevant_functions = relevant_functions
+        self.project_name = project_name
         self.contract_name = contract_name
         self.from_stmt = from_stmt
         self.to_stmt = to_stmt

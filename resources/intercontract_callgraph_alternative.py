@@ -64,10 +64,10 @@ def export_to_graphviz_pdf():
     """
     Exports the call graph to DOT and PDF with Graphviz.
     """
-    dot_file = f"/home/fbioribeiro/thesis-tool/greed/resources/intercontract_callgraph.dot"
-    pdf_file = f"/home/fbioribeiro/thesis-tool/greed/resources/intercontract_callgraph.pdf"
-    png_file = f"/home/fbioribeiro/thesis-tool/greed/resources/intercontract_callgraph.png"
-    svg_file = f"/home/fbioribeiro/thesis-tool/greed/resources/intercontract_callgraph.svg"
+    dot_file = f"/tmp/{project_name}/intercontract_callgraph.dot"
+    pdf_file = f"/tmp/{project_name}/intercontract_callgraph.pdf"
+    png_file = f"/tmp/{project_name}/intercontract_callgraph.png"
+    svg_file = f"/tmp/{project_name}/intercontract_callgraph.svg"
 
     # Assign random colors to each contract
     def random_color():
@@ -150,22 +150,22 @@ def export_call_graphs_to_json():
     reverse_call_graph_serializable = {k: list(v) for k, v in intercontract_reverse_call_graph.items()}
 
     # Export per contract reverse call graphs
-    with open("/home/fbioribeiro/thesis-tool/greed/resources/per_contract_reverse_call_graphs.json", "w") as f:
+    with open(f"/tmp/{project_name}/per_contract_reverse_call_graphs.json", "w") as f:
         json.dump(json_ready_per_contract_reverse_call_graphs, f, indent=2)
 
     # Export call graph
-    with open("/home/fbioribeiro/thesis-tool/greed/resources/call_graph.json", "w") as f:
+    with open(f"/tmp/{project_name}/call_graph.json", "w") as f:
         json.dump(call_graph_serializable, f, indent=4)
 
     # Export reverse call graph
-    with open("/home/fbioribeiro/thesis-tool/greed/resources/reverse_call_graph.json", "w") as f:
+    with open(f"/tmp/{project_name}/reverse_call_graph.json", "w") as f:
         json.dump(reverse_call_graph_serializable, f, indent=4)
 
 def export_complete_flows_to_json():
     """
     Exports the complete flows to a JSON file.
     """
-    with open("/home/fbioribeiro/thesis-tool/greed/resources/complete_flows.json", "w") as f:
+    with open(f"/tmp/{project_name}/complete_flows.json", "w") as f:
         json.dump([asdict(cf) for cf in complete_flows], f, indent=2)
 
 def build_call_graphs(tac_code, function_set, contract_name):
@@ -228,13 +228,13 @@ def load_files():
         print(f"Loading files for contract: {contract_name}")
 
         ### Load the contract TAC
-        with open("/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/.temp/" + contract_name + "/out/contract.tac", "r") as tac_file:
+        with open(f"/tmp/{project_name}/" + contract_name + "/contract.tac", "r") as tac_file:
             tac_code = tac_file.read()
 
         tac_codes[contract_name] = tac_code
         
         ### Load the contract functions
-        with open("/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/.temp/" + contract_name + "/out/Function.csv", newline='') as csvfile:
+        with open(f"/tmp/{project_name}/" + contract_name + "/Function.csv", newline='') as csvfile:
             reader = csv.reader(csvfile)
 
             rows = [row[0] for row in reader]
@@ -246,7 +246,7 @@ def load_files():
         ### Load the public functions
         entry_block_to_function = dict()
 
-        with open("/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/.temp/" + contract_name + "/out/PublicFunction.csv", newline='') as csvfile:
+        with open(f"/tmp/{project_name}/" + contract_name + "/PublicFunction.csv", newline='') as csvfile:
             reader = csv.reader(csvfile, delimiter='\t')
             for row in reader:
                 if len(row) == 2:
@@ -258,7 +258,7 @@ def load_files():
         ### Load the external calls
         statement_to_externalcall_function = dict()
 
-        with open("/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/.temp/" + contract_name + "/out/CallToSignatureHex.csv", newline='') as csvfile:
+        with open(f"/tmp/{project_name}/" + contract_name + "/CallToSignatureHex.csv", newline='') as csvfile:
             reader = csv.reader(csvfile, delimiter='\t')
             for row in reader:
                 if len(row) == 2:
@@ -270,7 +270,7 @@ def load_files():
         ### Load the TAC_Block's
         statement_to_block = dict()
 
-        with open("/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/.temp/" + contract_name + "/out/TAC_Block.csv", newline='') as csvfile:
+        with open(f"/tmp/{project_name}/" + contract_name + "/TAC_Block.csv", newline='') as csvfile:
             reader = csv.reader(csvfile, delimiter='\t')
             for row in reader:
                 if len(row) == 2:
@@ -282,7 +282,7 @@ def load_files():
         ### Load the InFunction's
         block_to_function_entry_block = dict()
 
-        with open("/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/.temp/" + contract_name + "/out/InFunction.csv", newline='') as csvfile:
+        with open(f"/tmp/{project_name}/" + contract_name + "/InFunction.csv", newline='') as csvfile:
             reader = csv.reader(csvfile, delimiter='\t')
             for row in reader:
                 if len(row) == 2:
@@ -314,7 +314,7 @@ def load_files():
         ### Load the Partial flows External Call -> External Call
         flows_externalcall_to_externalcall = list()
 
-        with open("/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/.temp/" + contract_name + "/out/PartialFlowExternalCallToExternalCall.csv", newline='') as csvfile:
+        with open(f"/tmp/{project_name}/" + contract_name + "/PartialFlowExternalCallToExternalCall.csv", newline='') as csvfile:
             reader = csv.reader(csvfile, delimiter='\t')
             for row in reader:
                 if len(row) == 5:
@@ -325,7 +325,7 @@ def load_files():
 
         ### Load the Partial flows Calldataload -> External Call
         flows_call_data_load_to_external_call = list()
-        with open("/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/.temp/" + contract_name + "/out/PartialFlowCallDataLoadToExternalCall.csv", newline='') as csvfile:
+        with open(f"/tmp/{project_name}/" + contract_name + "/PartialFlowCallDataLoadToExternalCall.csv", newline='') as csvfile:
             reader = csv.reader(csvfile, delimiter='\t')
             for row in reader:
                 if len(row) == 5:
@@ -336,7 +336,7 @@ def load_files():
 
         ### Load the Partial flows Calldataload -> Sink
         flows_call_data_load_to_sink = list()
-        with open("/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/.temp/" + contract_name + "/out/PartialFlowCallDataLoadToSink.csv", newline='') as csvfile:
+        with open(f"/tmp/{project_name}/" + contract_name + "/PartialFlowCallDataLoadToSink.csv", newline='') as csvfile:
             reader = csv.reader(csvfile, delimiter='\t')
             for row in reader:
                 if len(row) == 4:
@@ -348,7 +348,7 @@ def load_files():
         ### Load the Partial flows External Call -> Sink
         flows_externalcall_to_sink = list()
 
-        with open("/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/.temp/" + contract_name + "/out/PartialFlowExternalCallToSink.csv", newline='') as csvfile:
+        with open(f"/tmp/{project_name}/" + contract_name + "/PartialFlowExternalCallToSink.csv", newline='') as csvfile:
             reader = csv.reader(csvfile, delimiter='\t')
             for row in reader:
                 if len(row) == 4:
@@ -554,8 +554,11 @@ def get_args():
 def main():
     args = get_args()
 
-    project_folder = args.project_folder_path
-    contract_set_file = os.path.join(project_folder, "contract_set.txt")
+    project_folder_path = args.project_folder_path
+    contract_set_file = os.path.join(project_folder_path, "contract_set.txt")
+
+    global project_name
+    project_name = os.path.basename(project_folder_path.rstrip("/"))
 
     with open(contract_set_file, "r") as f:
         contract_string = f.read().strip()

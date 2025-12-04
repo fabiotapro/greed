@@ -125,7 +125,7 @@ class SymbolicEVMState:
         self.previous_output_var_val = previous_output_var_val
 
         # Load the external call's signatures map
-        with open("/home/fbioribeiro/thesis-tool/greed/gigahorse-toolchain/.temp/" + self.project.contract_name + "/out/CallToSignatureHex.csv", newline='') as csvfile:
+        with open(f"/tmp/{self.project.project_name}/{self.project.contract_name}/CallToSignatureHex.csv", newline='') as csvfile:
             reader = csv.reader(csvfile, delimiter='\t')
             for row in reader:
                 if len(row) == 2:
