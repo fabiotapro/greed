@@ -156,7 +156,7 @@ if [ -z $NO_GIGAHORSE ]; then
 
   # copy greed client
   cp $GREED_DIR/resources/greed_client.dl $GIGAHORSE_DIR/clientlib/
-  cp $GREED_DIR/resources/escape_client.dl $GIGAHORSE_DIR/clientlib/
+  cp $GREED_DIR/../resources/escape_client.dl $GIGAHORSE_DIR/clientlib/
 
   # compile souffle-addon
   echo "Compiling souffle-addon.."
