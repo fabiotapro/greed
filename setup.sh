@@ -156,7 +156,7 @@ if [ -z $NO_GIGAHORSE ]; then
 
   # copy greed client
   cp $GREED_DIR/resources/greed_client.dl $GIGAHORSE_DIR/clientlib/
-  cp $GREED_DIR/resources/thesis_client.dl $GIGAHORSE_DIR/clientlib/
+  cp $GREED_DIR/resources/escape_client.dl $GIGAHORSE_DIR/clientlib/
 
   # compile souffle-addon
   echo "Compiling souffle-addon.."
@@ -176,7 +176,7 @@ if [ -z $NO_GIGAHORSE ]; then
   compile "main.dl" "logic/main.dl"
   compile "analytics_client.dl" "clients/analytics_client.dl"
   compile "greed_client.dl" "clientlib/greed_client.dl"
-  compile "thesis_client.dl" "clientlib/thesis_client.dl"
+  compile "escape_client.dl" "clientlib/escape_client.dl"
 else
   true
 fi
